@@ -1,0 +1,371 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SoroLens API",
+    "description": "Read-only JSON API for exploring Soroban contract events, mirroring the web UI. All endpoints are under /api. The root tree also serves /health (combined health, 200/503), /livez (liveness probe, always 200), /readyz (readiness probe, 200/503 per the event source's health), and /metrics (Prometheus text format), which live outside this spec's /api base path.",
+    "version": "1.0.0",
+    "license": {
+      "name": "Apache-2.0"
+    }
+  },
+  "servers": [
+    {
+      "url": "/api"
+    }
+  ],
+  "paths": {
+    "/contracts": {
+      "get": {
+        "summary": "List contracts with events, most recently active first",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Substring of a contract ID, case-insensitive"
+          },
+          { "$ref": "#/components/parameters/Cursor" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contracts page",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ContractPage" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/contracts/{id}/events": {
+      "parameters": [
+        { "$ref": "#/components/parameters/ContractID" }
+      ],
+      "get": {
+        "summary": "One contract's events, newest first",
+        "parameters": [
+          { "$ref": "#/components/parameters/EventType" },
+          { "$ref": "#/components/parameters/Topic" },
+          { "$ref": "#/components/parameters/FromLedger" },
+          { "$ref": "#/components/parameters/ToLedger" },
+          { "$ref": "#/components/parameters/Cursor" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Events page",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EventPage" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/contracts/{id}/stats": {
+      "parameters": [
+        { "$ref": "#/components/parameters/ContractID" }
+      ],
+      "get": {
+        "summary": "One contract's totals and event-type breakdown",
+        "responses": {
+          "200": {
+            "description": "Contract stats",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ContractStats" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/events": {
+      "get": {
+        "summary": "Events across all contracts, newest first",
+        "parameters": [
+          {
+            "name": "contract_id",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Restrict to one contract"
+          },
+          { "$ref": "#/components/parameters/EventType" },
+          { "$ref": "#/components/parameters/Topic" },
+          { "$ref": "#/components/parameters/FromLedger" },
+          { "$ref": "#/components/parameters/ToLedger" },
+          { "$ref": "#/components/parameters/Cursor" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Events page",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EventPage" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/events/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": { "type": "string" },
+          "description": "Event TOID"
+        }
+      ],
+      "get": {
+        "summary": "One event by its TOID, fully decoded",
+        "responses": {
+          "200": {
+            "description": "Event",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Event" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/stats": {
+      "get": {
+        "summary": "Everything visible to this source",
+        "responses": {
+          "200": {
+            "description": "Global stats; approximate=true in upstream mode marks figures derived from a bounded scan",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Stats" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/version": {
+      "get": {
+        "summary": "Build information",
+        "responses": {
+          "200": {
+            "description": "Version, commit and build date baked in via ldflags",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Version" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "ContractID": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "pattern": "^C[A-Z2-7]{55}$" },
+        "description": "Soroban contract strkey"
+      },
+      "Cursor": {
+        "name": "cursor",
+        "in": "query",
+        "schema": { "type": "string" },
+        "description": "Opaque continuation cursor from a previous page's next_cursor"
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "schema": { "type": "integer", "minimum": 1, "maximum": 200, "default": 50 }
+      },
+      "EventType": {
+        "name": "type",
+        "in": "query",
+        "schema": {
+          "type": "string",
+          "enum": ["contract", "system", "diagnostic"]
+        }
+      },
+      "Topic": {
+        "name": "topic",
+        "in": "query",
+        "schema": { "type": "string" },
+        "description": "A bare word is treated as the event name (topic=transfer means {\"symbol\":\"transfer\"}); any JSON value also works, e.g. topic={\"address\":\"G…\"}. Matches at any topic position. URL-encode JSON values."
+      },
+      "FromLedger": {
+        "name": "from_ledger",
+        "in": "query",
+        "schema": { "type": "integer", "format": "int64", "minimum": 0 },
+        "description": "Inclusive lower ledger bound"
+      },
+      "ToLedger": {
+        "name": "to_ledger",
+        "in": "query",
+        "schema": { "type": "integer", "format": "int64", "minimum": 0 },
+        "description": "Inclusive upper ledger bound"
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "Error envelope",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Human-readable message"
+          },
+          "code": {
+            "type": "string",
+            "description": "Stable status token, e.g. Not Found"
+          },
+          "request_id": {
+            "type": "string",
+            "description": "Correlation ID, also on the X-Request-ID response header"
+          }
+        }
+      },
+      "Contract": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "event_count": { "type": "integer", "format": "int64" },
+          "first_ledger": { "type": "integer", "format": "int64" },
+          "last_ledger": { "type": "integer", "format": "int64" },
+          "last_activity": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ContractPage": {
+        "type": "object",
+        "properties": {
+          "contracts": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Contract" }
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "Absent when there are no more pages"
+          }
+        }
+      },
+      "Event": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "TOID-based, zero-padded so lexicographic order matches chronological order"
+          },
+          "contract_id": { "type": "string" },
+          "ledger": { "type": "integer", "format": "int64" },
+          "type": {
+            "type": "string",
+            "enum": ["contract", "system", "diagnostic"]
+          },
+          "tx_hash": { "type": "string" },
+          "tx_index": { "type": "integer" },
+          "op_index": { "type": "integer" },
+          "in_successful_call": { "type": "boolean" },
+          "topics": {
+            "type": "array",
+            "items": {},
+            "description": "Decoded ScVals in single-key wrapper form, e.g. {\"symbol\":\"transfer\"}. Wide integers are decimal strings."
+          },
+          "value": {
+            "description": "One decoded ScVal in single-key wrapper form"
+          },
+          "ledger_closed_at": { "type": "string", "format": "date-time" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "EventPage": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Event" }
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "Absent when there are no more pages"
+          }
+        }
+      },
+      "ContractStats": {
+        "type": "object",
+        "properties": {
+          "contract_id": { "type": "string" },
+          "total_events": { "type": "integer", "format": "int64" },
+          "first_ledger": { "type": "integer", "format": "int64" },
+          "last_ledger": { "type": "integer", "format": "int64" },
+          "type_breakdown": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": { "type": "string" },
+                "count": { "type": "integer", "format": "int64" }
+              }
+            }
+          },
+          "approximate": { "type": "boolean" }
+        }
+      },
+      "Stats": {
+        "type": "object",
+        "properties": {
+          "total_events": { "type": "integer", "format": "int64" },
+          "contract_count": { "type": "integer", "format": "int64" },
+          "first_ledger": { "type": "integer", "format": "int64" },
+          "last_ledger": { "type": "integer", "format": "int64" },
+          "type_breakdown": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": { "type": "string" },
+                "count": { "type": "integer", "format": "int64" }
+              }
+            }
+          },
+          "approximate": {
+            "type": "boolean",
+            "description": "true in upstream mode: totals exact, breakdown derived from a bounded scan"
+          }
+        }
+      },
+      "Version": {
+        "type": "object",
+        "properties": {
+          "version": { "type": "string" },
+          "commit": { "type": "string" },
+          "build_date": { "type": "string" }
+        }
+      }
+    }
+  }
+}
