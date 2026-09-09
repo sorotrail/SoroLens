@@ -27,6 +27,7 @@ import (
 	"github.com/sorotrail/sorolens/internal/decode"
 	"github.com/sorotrail/sorolens/internal/ingest"
 	"github.com/sorotrail/sorolens/internal/metrics"
+	"github.com/sorotrail/sorolens/internal/reqid"
 	"github.com/sorotrail/sorolens/internal/rpc"
 	"github.com/sorotrail/sorolens/internal/source"
 	"github.com/sorotrail/sorolens/internal/source/rpcsource"
@@ -197,8 +198,7 @@ func router(src source.EventSource, log *slog.Logger, m *metrics.Metrics) http.H
 	}
 
 	r := chi.NewRouter()
-	r.Use(requestLogger(log))
-	r.Use(middleware.Recoverer)
+	r.Use(middleware.Recoverer, reqid.Middleware, requestLogger(log))
 	// RoutePattern returns the matched chi pattern (e.g. "/api/events/{id}"),
 	// not the raw path, keeping metric label cardinality bounded.
 	metrics.RoutePattern = func(req *http.Request) string {
@@ -233,6 +233,7 @@ func requestLogger(log *slog.Logger) func(http.Handler) http.Handler {
 				"status", ww.Status(),
 				"duration", time.Since(start),
 				"remote", r.RemoteAddr,
+				"request_id", reqid.From(r),
 			)
 		})
 	}

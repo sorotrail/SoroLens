@@ -11,11 +11,18 @@ import (
 
 	"github.com/sorotrail/sorolens/internal/buildinfo"
 	"github.com/sorotrail/sorolens/internal/config"
+	"github.com/sorotrail/sorolens/internal/reqid"
 	"github.com/sorotrail/sorolens/internal/source"
 )
 
+// errorResponse is the structured error envelope. "error" carries the
+// human-readable message; "code" is a stable token clients can branch on;
+// "request_id" maps a quoted error to one request in the logs (also on the
+// X-Request-ID response header).
 type errorResponse struct {
-	Error string `json:"error"`
+	Error     string `json:"error"`
+	Code      string `json:"code,omitempty"`
+	RequestID string `json:"request_id,omitempty"`
 }
 
 func (s *Server) handleListContracts(w http.ResponseWriter, r *http.Request) {
@@ -26,14 +33,14 @@ func (s *Server) handleListContracts(w http.ResponseWriter, r *http.Request) {
 
 	limit, err := parseLimit(r.URL.Query().Get("limit"))
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
+		writeError(w, r, http.StatusBadRequest, err)
 		return
 	}
 	q.Limit = limit
 
 	page, err := s.src.ListContracts(r.Context(), q)
 	if err != nil {
-		s.fail(w, "listing contracts", err)
+		s.fail(w, r, "listing contracts", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, page)
@@ -42,13 +49,13 @@ func (s *Server) handleListContracts(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListEvents(w http.ResponseWriter, r *http.Request) {
 	q, err := EventQueryFromRequest(r)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
+		writeError(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	page, err := s.src.ListEvents(r.Context(), q)
 	if err != nil {
-		s.fail(w, "listing events", err)
+		s.fail(w, r, "listing events", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, page)
@@ -57,20 +64,20 @@ func (s *Server) handleListEvents(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleContractEvents(w http.ResponseWriter, r *http.Request) {
 	contractID := chi.URLParam(r, "id")
 	if !config.ValidContractID(contractID) {
-		writeError(w, http.StatusBadRequest, fmt.Errorf("invalid contract ID %q", contractID))
+		writeError(w, r, http.StatusBadRequest, fmt.Errorf("invalid contract ID %q", contractID))
 		return
 	}
 
 	q, err := EventQueryFromRequest(r)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
+		writeError(w, r, http.StatusBadRequest, err)
 		return
 	}
 	q.ContractID = contractID
 
 	page, err := s.src.ListEvents(r.Context(), q)
 	if err != nil {
-		s.fail(w, "listing contract events", err)
+		s.fail(w, r, "listing contract events", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, page)
@@ -79,13 +86,13 @@ func (s *Server) handleContractEvents(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleContractStats(w http.ResponseWriter, r *http.Request) {
 	contractID := chi.URLParam(r, "id")
 	if !config.ValidContractID(contractID) {
-		writeError(w, http.StatusBadRequest, fmt.Errorf("invalid contract ID %q", contractID))
+		writeError(w, r, http.StatusBadRequest, fmt.Errorf("invalid contract ID %q", contractID))
 		return
 	}
 
 	stats, err := s.src.ContractStats(r.Context(), contractID)
 	if err != nil {
-		s.fail(w, "loading contract stats", err)
+		s.fail(w, r, "loading contract stats", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, stats)
@@ -96,11 +103,11 @@ func (s *Server) handleGetEvent(w http.ResponseWriter, r *http.Request) {
 
 	event, err := s.src.GetEvent(r.Context(), id)
 	if errors.Is(err, source.ErrNotFound) {
-		writeError(w, http.StatusNotFound, fmt.Errorf("event %q not found", id))
+		writeError(w, r, http.StatusNotFound, fmt.Errorf("event %q not found", id))
 		return
 	}
 	if err != nil {
-		s.fail(w, "loading event", err)
+		s.fail(w, r, "loading event", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, event)
@@ -119,7 +126,7 @@ func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	stats, err := s.src.Stats(r.Context())
 	if err != nil {
-		s.fail(w, "loading stats", err)
+		s.fail(w, r, "loading stats", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, stats)
@@ -197,9 +204,9 @@ func parseLimit(raw string) (int, error) {
 
 // fail logs the underlying error and returns a generic message, so internal
 // details never leak into an API response.
-func (s *Server) fail(w http.ResponseWriter, action string, err error) {
-	s.log.Error(action+" failed", "error", err)
-	writeError(w, http.StatusInternalServerError, errors.New(action+" failed"))
+func (s *Server) fail(w http.ResponseWriter, r *http.Request, action string, err error) {
+	s.log.Error(action+" failed", "request_id", reqid.From(r), "error", err)
+	writeError(w, r, http.StatusInternalServerError, errors.New(action+" failed"))
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -208,6 +215,10 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-func writeError(w http.ResponseWriter, status int, err error) {
-	writeJSON(w, status, errorResponse{Error: err.Error()})
+func writeError(w http.ResponseWriter, r *http.Request, status int, err error) {
+	writeJSON(w, status, errorResponse{
+		Error:     err.Error(),
+		Code:      http.StatusText(status),
+		RequestID: reqid.From(r),
+	})
 }
