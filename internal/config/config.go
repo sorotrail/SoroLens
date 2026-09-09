@@ -41,6 +41,12 @@ const (
 type Config struct {
 	// SourceMode selects the EventSource implementation (rpc or sorotrail).
 	SourceMode SourceMode
+	// Network is the Stellar network in standalone mode — its name,
+	// passphrase and RPC endpoint, resolved from NETWORK / RPC_URL /
+	// NETWORK_PASSPHRASE by ParseNetwork. Verified against the node at
+	// startup; unused in upstream mode, where the SoroTrail indexer's own
+	// deployment owns its network.
+	Network Network
 
 	// RPCURL is the Stellar RPC endpoint (JSON-RPC 2.0 over HTTP). Standalone
 	// mode only.
@@ -77,9 +83,15 @@ func (c Config) UsesDatabase() bool { return c.SourceMode == ModeRPC }
 // Load reads configuration from the environment and validates that the
 // variables required by the selected SOURCE_MODE are present.
 func Load() (Config, error) {
+	net, err := ParseNetwork(os.Getenv)
+	if err != nil {
+		return Config{}, err
+	}
+
 	cfg := Config{
 		SourceMode:       DefaultSourceMode,
-		RPCURL:           getenv("RPC_URL", DefaultRPCURL),
+		Network:          net,
+		RPCURL:           net.RPCURL,
 		DatabaseURL:      os.Getenv("DATABASE_URL"),
 		PollInterval:     DefaultPollInterval,
 		SoroTrailURL:     strings.TrimRight(os.Getenv("SOROTRAIL_URL"), "/"),

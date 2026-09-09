@@ -139,6 +139,16 @@ func (c *HTTPClient) GetHealth(ctx context.Context) (Health, error) {
 	return out, nil
 }
 
+// GetNetwork returns the network the node belongs to, identified by its
+// passphrase. Used at startup to verify the configured network matches.
+func (c *HTTPClient) GetNetwork(ctx context.Context) (Network, error) {
+	var out Network
+	if err := c.call(ctx, "getNetwork", nil, &out); err != nil {
+		return Network{}, err
+	}
+	return out, nil
+}
+
 func (c *HTTPClient) call(ctx context.Context, method string, params, out any) error {
 	body, err := json.Marshal(jsonRPCRequest{
 		JSONRPC: "2.0",

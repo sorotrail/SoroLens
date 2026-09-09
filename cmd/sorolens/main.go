@@ -151,6 +151,17 @@ func buildSource(ctx context.Context, cfg config.Config, log *slog.Logger) (
 		}
 
 		client := rpc.NewHTTPClient(cfg.RPCURL, nil)
+
+		// Verify the endpoint really is the configured network before
+		// ingesting anything: a mainnet endpoint behind testnet config makes
+		// the explorer quietly show the wrong chain's activity.
+		if net, err := client.GetNetwork(ctx); err != nil {
+			log.Warn("could not verify network passphrase", "error", err)
+		} else if err := config.VerifyPassphrase(cfg.Network.Passphrase, net.Passphrase); err != nil {
+			return nil, nil, nil, err
+		}
+		log.Info("network verified", "network", cfg.Network.Name, "rpc_url", cfg.RPCURL)
+
 		client.OnXDRFallback(func() {
 			log.Warn("stellar rpc rejected xdrFormat=json; decoding base64 XDR locally instead")
 		})
