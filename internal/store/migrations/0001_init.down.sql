@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS ingest_state;
+DROP TABLE IF EXISTS events;

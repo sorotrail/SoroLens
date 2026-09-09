@@ -1,0 +1,40 @@
+services:
+  sorolens:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      # Standalone mode by default: SoroLens polls Stellar RPC itself and
+      # stores what it finds. Switch to upstream mode by setting
+      # SOURCE_MODE=sorotrail and SOROTRAIL_URL (see the README).
+      SOURCE_MODE: ${SOURCE_MODE:-rpc}
+      DATABASE_URL: postgres://sorolens:sorolens@postgres:5432/sorolens?sslmode=disable
+      RPC_URL: ${RPC_URL:-https://soroban-testnet.stellar.org}
+      SOROTRAIL_URL: ${SOROTRAIL_URL:-}
+      POLL_INTERVAL: ${POLL_INTERVAL:-5s}
+      WATCHED_CONTRACTS: ${WATCHED_CONTRACTS:-}
+      HTTP_ADDR: ":8080"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: sorolens
+      POSTGRES_PASSWORD: sorolens
+      POSTGRES_DB: sorolens
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sorolens"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+volumes:
+  pgdata:

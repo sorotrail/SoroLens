@@ -1,0 +1,91 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}} · SoroLens</title>
+  <script src="https://unpkg.com/htmx.org@1.9.12" crossorigin="anonymous"></script>
+  <style>
+    :root { color-scheme: light dark; --line: color-mix(in srgb, currentColor 18%, transparent); }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; margin: 0; line-height: 1.5; }
+    header { display: flex; gap: 1.25rem; align-items: baseline; flex-wrap: wrap;
+             padding: .75rem 1.5rem; border-bottom: 1px solid var(--line); }
+    header .brand { font-weight: 700; font-size: 1.1rem; }
+    header a { text-decoration: none; color: inherit; opacity: .8; }
+    header a:hover, header a:focus { opacity: 1; text-decoration: underline; }
+    header form { margin-left: auto; display: flex; gap: .4rem; }
+    header input { min-width: 22rem; max-width: 100%; padding: .3rem .5rem; }
+    main { padding: 1.5rem; max-width: 76rem; margin: 0 auto; }
+    h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+    h2 { font-size: 1.1rem; margin: 1.5rem 0 .5rem; }
+    a { color: inherit; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    .scroll { overflow-x: auto; }
+    th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid var(--line);
+             vertical-align: top; }
+    th { font-size: .8rem; text-transform: uppercase; opacity: .7; white-space: nowrap; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85em; }
+    .muted { opacity: .65; font-size: .9rem; }
+    .stats { display: flex; gap: 1rem; flex-wrap: wrap; margin: 1rem 0; }
+    .stat { border: 1px solid var(--line); border-radius: .5rem; padding: .75rem 1.25rem; min-width: 9rem; }
+    .stat b { display: block; font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+    .stat span { font-size: .8rem; text-transform: uppercase; opacity: .7; }
+    .banner { border: 1px solid var(--line); border-left-width: 4px; border-radius: .4rem;
+              padding: .7rem 1rem; margin: 0 0 1rem; font-size: .9rem; }
+    .banner.warn { border-left-color: #b45309; }
+    .banner.bad  { border-left-color: #b91c1c; }
+    .pill { display: inline-block; padding: .05rem .5rem; border-radius: 1rem; font-size: .75rem;
+            border: 1px solid var(--line); white-space: nowrap; }
+    .pill.fail { border-color: #b91c1c; }
+    fieldset { border: 1px solid var(--line); border-radius: .5rem; margin: 1rem 0; padding: .75rem 1rem; }
+    legend { font-size: .8rem; text-transform: uppercase; opacity: .7; padding: 0 .3rem; }
+    .filters { display: flex; gap: .75rem; flex-wrap: wrap; align-items: flex-end; }
+    .filters label { display: block; font-size: .8rem; opacity: .75; margin-bottom: .15rem; }
+    .filters input, .filters select { padding: .3rem .4rem; }
+    button { cursor: pointer; padding: .35rem .9rem; }
+    .topics { display: flex; flex-wrap: wrap; gap: .3rem; }
+    .topic { border: 1px solid var(--line); border-radius: .3rem; padding: .05rem .4rem; font-size: .8rem; }
+    pre { background: color-mix(in srgb, currentColor 6%, transparent); padding: .75rem;
+          border-radius: .4rem; overflow-x: auto; }
+    dl.detail { display: grid; grid-template-columns: max-content 1fr; gap: .4rem 1.5rem; margin: 1rem 0; }
+    dl.detail dt { font-size: .8rem; text-transform: uppercase; opacity: .7; }
+    dl.detail dd { margin: 0; word-break: break-all; }
+    .empty { padding: 2rem; text-align: center; opacity: .7; border: 1px dashed var(--line);
+             border-radius: .5rem; }
+    .htmx-request { opacity: .5; }
+  </style>
+</head>
+<body>
+<header>
+  <span class="brand">🔭 SoroLens</span>
+  <a href="/">Overview</a>
+  <a href="/contracts">Contracts</a>
+  <form action="/search" method="get" role="search">
+    <label for="q" class="visually-hidden" hidden>Search</label>
+    <input id="q" type="text" name="q" placeholder="Contract ID (C…) or event ID (TOID)"
+           autocomplete="off" spellcheck="false">
+    <button type="submit">Search</button>
+  </form>
+</header>
+<main>
+  {{template "status-banner" .Status}}
+  {{template "content" .}}
+</main>
+</body>
+</html>{{end}}
+
+{{/* status-banner tells the reader what this instance can and cannot see.
+     Standalone mode in particular only holds events captured while running,
+     which otherwise looks like a broken explorer. */}}
+{{define "status-banner"}}
+  {{if not .Healthy}}
+    <p class="banner bad"><b>Source unavailable.</b> {{.Detail}}</p>
+  {{else if .RetentionNote}}
+    <p class="banner warn">
+      <b>Mode: {{.Mode}}.</b> {{.RetentionNote}}
+      {{if .LatestLedger}}<span class="muted">Latest ledger {{.LatestLedger}}.</span>{{end}}
+    </p>
+  {{end}}
+{{end}}

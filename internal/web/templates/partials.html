@@ -1,0 +1,109 @@
+{{/* events-table renders one page of events plus its own "load more" button.
+     It is rendered both inside a full page and on its own for htmx swaps, so
+     it must never depend on anything outside the eventsFragment it receives. */}}
+{{define "events-table"}}
+{{if .Events}}
+<div class="scroll">
+  <table>
+    <thead>
+      <tr>
+        <th>Event</th>
+        <th>Ledger</th>
+        {{if not .ContractID}}<th>Contract</th>{{end}}
+        <th>Topics</th>
+        <th>Value</th>
+        <th>Type</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Events}}
+      <tr>
+        <td>
+          {{$name := eventName .Topics}}
+          {{if $name}}<b>{{$name}}</b>{{else}}<span class="muted">unnamed</span>{{end}}
+          {{if not .InSuccessfulCall}}<span class="pill fail" title="Emitted in a call that failed">failed</span>{{end}}
+        </td>
+        <td class="num">{{.Ledger}}</td>
+        {{if not $.ContractID}}
+        <td><a class="mono" href="/contracts/{{.ContractID}}">{{shorten .ContractID 6}}</a></td>
+        {{end}}
+        <td>
+          <div class="topics">
+            {{range renderTopics .Topics}}<span class="topic mono">{{summary . 28}}</span>{{end}}
+          </div>
+        </td>
+        <td class="mono">{{summary (render .Value) 48}}</td>
+        <td><span class="pill">{{.Type}}</span></td>
+        <td><a href="/events/{{.ID}}">details</a></td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</div>
+
+{{if .MoreURL}}
+{{/* The button replaces itself with the next page's table and button, so the
+     list grows in place rather than paging back and forth. */}}
+<button hx-get="{{.MoreURL}}"
+        hx-target="closest button"
+        hx-swap="outerHTML"
+        hx-indicator="closest button">Load more</button>
+{{end}}
+
+{{else}}
+<div class="empty">
+  <p>No events match these filters.</p>
+  <p class="muted">If this instance only just started in standalone mode, it may not have captured any events yet.</p>
+</div>
+{{end}}
+{{end}}
+
+
+{{/* events-filters is the filter form for the contract page. It targets the
+     events table via htmx so filtering never reloads the whole page. */}}
+{{define "events-filters"}}
+<form class="filters"
+      hx-get="/partials/events"
+      hx-target="#events"
+      hx-swap="innerHTML"
+      hx-indicator="#events">
+  <input type="hidden" name="contract_id" value="{{.ContractID}}">
+  <div>
+    <label for="f-type">Event type</label>
+    <select id="f-type" name="type">
+      <option value=""{{if eq .Filters.Type ""}} selected{{end}}>any</option>
+      <option value="contract"{{if eq .Filters.Type "contract"}} selected{{end}}>contract</option>
+      <option value="system"{{if eq .Filters.Type "system"}} selected{{end}}>system</option>
+      <option value="diagnostic"{{if eq .Filters.Type "diagnostic"}} selected{{end}}>diagnostic</option>
+    </select>
+  </div>
+  <div>
+    <label for="f-topic">Topic</label>
+    <input id="f-topic" type="text" name="topic" value="{{.Filters.Topic}}"
+           placeholder="transfer" size="16"
+           title="An event name such as transfer, or a full JSON value such as {&quot;symbol&quot;:&quot;transfer&quot;}">
+  </div>
+  <div>
+    <label for="f-from">From ledger</label>
+    <input id="f-from" type="number" name="from_ledger" value="{{.Filters.FromLedger}}" min="1" size="10">
+  </div>
+  <div>
+    <label for="f-to">To ledger</label>
+    <input id="f-to" type="number" name="to_ledger" value="{{.Filters.ToLedger}}" min="1" size="10">
+  </div>
+  <button type="submit">Filter</button>
+</form>
+{{end}}
+
+
+{{/* type-breakdown renders an event-type histogram as a definition list. */}}
+{{define "type-breakdown"}}
+{{if .}}
+<div class="stats">
+  {{range .}}
+  <div class="stat"><b>{{.Count}}</b><span>{{.Type}}</span></div>
+  {{end}}
+</div>
+{{end}}
+{{end}}

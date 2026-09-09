@@ -1,0 +1,65 @@
+{{define "content"}}
+{{$e := .Data}}
+<h1>
+  {{$name := eventName $e.Topics}}
+  {{if $name}}{{$name}}{{else}}Event{{end}}
+  {{if not $e.InSuccessfulCall}}<span class="pill fail" title="Emitted in a contract call that ultimately failed">failed call</span>{{end}}
+</h1>
+<p class="mono muted">{{$e.ID}}</p>
+
+<h2>Decoded topics</h2>
+{{$topics := renderTopics $e.Topics}}
+{{if $topics}}
+<div class="scroll">
+  <table>
+    <thead><tr><th>#</th><th>Decoded</th></tr></thead>
+    <tbody>
+      {{range $i, $t := $topics}}
+      <tr><td class="num">{{$i}}</td><td class="mono">{{$t}}</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+</div>
+{{else}}
+<p class="muted">This event has no topics.</p>
+{{end}}
+
+<h2>Decoded value</h2>
+<pre class="mono">{{render $e.Value}}</pre>
+
+<h2>Details</h2>
+<dl class="detail">
+  <dt>Contract</dt>
+  <dd><a class="mono" href="/contracts/{{$e.ContractID}}">{{$e.ContractID}}</a></dd>
+
+  <dt>Type</dt>
+  <dd><span class="pill">{{$e.Type}}</span></dd>
+
+  <dt>Ledger</dt>
+  <dd>{{$e.Ledger}}</dd>
+
+  <dt>Ledger closed</dt>
+  <dd>{{if $e.LedgerClosedAt.IsZero}}<span class="muted">not reported by this source</span>{{else}}{{$e.LedgerClosedAt.UTC.Format "2006-01-02 15:04:05Z"}}{{end}}</dd>
+
+  <dt>Transaction</dt>
+  <dd class="mono">{{if $e.TxHash}}{{$e.TxHash}}{{else}}<span class="muted">unknown</span>{{end}}</dd>
+
+  <dt>Tx / op index</dt>
+  <dd>{{$e.TxIndex}} / {{$e.OpIndex}}</dd>
+
+  <dt>Successful call</dt>
+  <dd>{{if $e.InSuccessfulCall}}yes{{else}}no{{end}}</dd>
+
+  <dt>Indexed at</dt>
+  <dd>{{if $e.CreatedAt.IsZero}}<span class="muted">unknown</span>{{else}}{{$e.CreatedAt.UTC.Format "2006-01-02 15:04:05Z"}}{{end}}</dd>
+</dl>
+
+<h2>Raw decoded values</h2>
+<p class="muted">Topics and value exactly as stored, in the RPC's decoded ScVal JSON form.</p>
+<pre class="mono">topics: {{printf "%s" $e.Topics}}
+value:  {{printf "%s" $e.Value}}</pre>
+
+<p class="muted">
+  Same data as <a href="/api/events/{{$e.ID}}"><code>GET /api/events/{{$e.ID}}</code></a>.
+</p>
+{{end}}

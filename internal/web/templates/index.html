@@ -1,0 +1,26 @@
+{{define "content"}}
+{{$d := .Data}}
+<h1>Overview</h1>
+<p class="muted">Browse decoded Soroban contract events: what each contract emitted, with readable topics and values.</p>
+
+<div class="stats">
+  <div class="stat"><b>{{$d.Stats.TotalEvents}}</b><span>Events</span></div>
+  <div class="stat"><b>{{$d.Stats.ContractCount}}</b><span>Contracts</span></div>
+  {{if $d.Stats.FirstLedger}}<div class="stat"><b>{{$d.Stats.FirstLedger}}</b><span>First ledger</span></div>{{end}}
+  {{if $d.Stats.LastLedger}}<div class="stat"><b>{{$d.Stats.LastLedger}}</b><span>Last ledger</span></div>{{end}}
+</div>
+
+{{if $d.Stats.Approximate}}
+<p class="muted">Some figures on this page are derived from a bounded scan of recent events and are approximate.</p>
+{{end}}
+
+{{if $d.Stats.TypeBreakdown}}
+<h2>Events by type</h2>
+{{template "type-breakdown" $d.Stats.TypeBreakdown}}
+{{end}}
+
+<h2>Recent events</h2>
+{{template "events-table" $d.RecentFragment}}
+
+<p><a href="/contracts">Browse all contracts →</a></p>
+{{end}}
