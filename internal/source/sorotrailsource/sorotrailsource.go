@@ -53,6 +53,7 @@ func (s *Source) ListEvents(ctx context.Context, q source.EventQuery) (source.Ev
 	upstream := upstreamQuery{
 		ContractID: q.ContractID,
 		Type:       q.Type,
+		TxHash:     q.TxHash,
 		Topic:      q.Topic,
 	}
 

@@ -76,6 +76,9 @@
           },
           {
             "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/TxHash"
           }
         ],
         "responses": {
@@ -155,6 +158,14 @@
           },
           {
             "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "name": "tx_hash",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Restrict to events produced by one transaction"
           }
         ],
         "responses": {
@@ -337,6 +348,14 @@
           "minimum": 0
         },
         "description": "Inclusive upper ledger bound"
+      },
+      "TxHash": {
+        "name": "tx_hash",
+        "in": "query",
+        "schema": {
+          "type": "string"
+        },
+        "description": "Restrict to events produced by one transaction"
       }
     },
     "responses": {

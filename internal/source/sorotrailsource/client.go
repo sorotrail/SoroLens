@@ -55,6 +55,7 @@ type apiClient interface {
 type upstreamQuery struct {
 	ContractID string
 	Type       string
+	TxHash     string
 	Topic      json.RawMessage
 	FromLedger int64
 	ToLedger   int64
@@ -102,6 +103,10 @@ func (a *httpAPI) Events(ctx context.Context, q upstreamQuery) (upstreamPage, er
 	}
 	if q.Type != "" {
 		params.Set("type", q.Type)
+	}
+	if q.TxHash != "" {
+		// SoroTrail's /events accepts tx_hash as a filter; pass it through.
+		params.Set("tx_hash", q.TxHash)
 	}
 	if len(q.Topic) > 0 {
 		params.Set("topic", string(q.Topic))

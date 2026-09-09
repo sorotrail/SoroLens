@@ -155,7 +155,7 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 // mean the same thing in both places.
 func EventQueryFromRequest(r *http.Request) (source.EventQuery, error) {
 	params := r.URL.Query()
-	q := source.EventQuery{Cursor: params.Get("cursor")}
+	q := source.EventQuery{Cursor: params.Get("cursor"), TxHash: params.Get("tx_hash")}
 
 	switch t := params.Get("type"); t {
 	case "", "contract", "system", "diagnostic":

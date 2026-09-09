@@ -36,6 +36,7 @@ A contract's events, newest-first.
 | Param | Description |
 |---|---|
 | `type` | `contract`, `system`, or `diagnostic` |
+| `tx_hash` | Restrict to events from one transaction |
 | `topic` | Match by decoded topic (see build semantics) |
 | `from_ledger` / `to_ledger` | Inclusive ledger bounds |
 | `limit` / `cursor` | Pagination |

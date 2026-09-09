@@ -210,6 +210,7 @@ Query parameters:
 | Parameter | Description |
 | --- | --- |
 | `type` | `contract`, `system` or `diagnostic`. |
+| `tx_hash` | Only events produced by this transaction. |
 | `topic` | A bare word is treated as an event name, so `topic=transfer` means `{"symbol":"transfer"}`. Any JSON value also works, e.g. `topic={"address":"G…"}`. Matches at any topic position. |
 | `from_ledger` / `to_ledger` | Inclusive ledger bounds. |
 | `cursor` | Opaque; pass back the `next_cursor` from the previous page. |

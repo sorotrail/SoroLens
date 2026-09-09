@@ -78,6 +78,9 @@ type Contract struct {
 type EventQuery struct {
 	ContractID string
 	Type       string
+	// TxHash restricts the query to events produced by one transaction —
+	// the natural follow-up after seeing an interesting event in a list.
+	TxHash string
 	// Topic matches events having this exact decoded JSON value at any topic
 	// position, e.g. {"symbol":"transfer"}.
 	Topic      json.RawMessage

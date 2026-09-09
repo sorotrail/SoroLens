@@ -129,6 +129,9 @@ func (p *Postgres) QueryEvents(ctx context.Context, q source.EventQuery) ([]sour
 	if q.Type != "" {
 		where = append(where, "type = "+arg(q.Type))
 	}
+	if q.TxHash != "" {
+		where = append(where, "tx_hash = "+arg(q.TxHash))
+	}
 	if len(q.Topic) > 0 {
 		// Containment against a one-element array asks "is this value among
 		// the topics", which the GIN index on topics can serve.
