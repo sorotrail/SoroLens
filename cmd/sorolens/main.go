@@ -213,6 +213,8 @@ func router(src source.EventSource, log *slog.Logger, m *metrics.Metrics) http.H
 	// it exposes route timings and ingest counters, no event data.
 	r.Handle("/metrics", m.Handler())
 	r.Get("/health", apiServer.HealthHandler())
+	r.Get("/livez", apiServer.LivezHandler())
+	r.Get("/readyz", apiServer.ReadyzHandler())
 	r.Mount("/api", apiServer.Routes())
 	r.Mount("/", webServer.Routes())
 
