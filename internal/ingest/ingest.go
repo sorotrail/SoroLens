@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sorotrail/sorolens/internal/decode"
+	"github.com/sorotrail/sorolens/internal/metrics"
 	"github.com/sorotrail/sorolens/internal/rpc"
 	"github.com/sorotrail/sorolens/internal/source"
 	"github.com/sorotrail/sorolens/internal/store"
@@ -41,6 +42,8 @@ type Ingester struct {
 	decoder decode.Decoder
 	opts    Options
 	log     *slog.Logger
+	// metrics is optional instrumentation; nil-safe, see internal/metrics.
+	metrics *metrics.Metrics
 }
 
 // New builds an Ingester.
@@ -49,6 +52,12 @@ func New(client rpc.Client, st store.Store, dec decode.Decoder, opts Options, lo
 		opts.PollInterval = 5 * time.Second
 	}
 	return &Ingester{rpc: client, store: st, decoder: dec, opts: opts, log: log}
+}
+
+// WithMetrics attaches Prometheus instrumentation to the ingest loop.
+func (i *Ingester) WithMetrics(m *metrics.Metrics) *Ingester {
+	i.metrics = m
+	return i
 }
 
 // Run polls until ctx is cancelled. A failed poll is logged and retried on the
@@ -76,7 +85,10 @@ func (i *Ingester) Run(ctx context.Context) error {
 		case <-timer.C:
 		}
 
-		if err := i.pollOnce(ctx); err != nil {
+		start := time.Now()
+		err := i.pollOnce(ctx)
+		i.metrics.RecordPoll(err == nil, time.Since(start))
+		if err != nil {
 			if ctx.Err() != nil {
 				i.log.Info("ingester stopping")
 				return nil
@@ -100,8 +112,10 @@ func (i *Ingester) pollOnce(ctx context.Context) error {
 	}
 	if start > latest.Sequence {
 		// Already caught up; nothing has closed since the last poll.
+		i.metrics.SetLag(0)
 		return nil
 	}
+	i.metrics.SetLag(int64(latest.Sequence) - int64(start))
 
 	// endLedger is exclusive, so +1 includes the tip itself.
 	endExclusive := latest.Sequence + 1
@@ -118,6 +132,9 @@ func (i *Ingester) pollOnce(ctx context.Context) error {
 	if err := i.store.SaveIngestState(ctx, store.IngestState{LastLedger: int64(latest.Sequence)}); err != nil {
 		return err
 	}
+
+	i.metrics.RecordEvents(total)
+	i.metrics.SetLag(0) // caught up: the resume point now equals the tip
 
 	if total > 0 {
 		i.log.Info("ingested events", "count", total, "from_ledger", start, "to_ledger", latest.Sequence)

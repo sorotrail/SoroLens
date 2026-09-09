@@ -26,6 +26,7 @@ import (
 	"github.com/sorotrail/sorolens/internal/config"
 	"github.com/sorotrail/sorolens/internal/decode"
 	"github.com/sorotrail/sorolens/internal/ingest"
+	"github.com/sorotrail/sorolens/internal/metrics"
 	"github.com/sorotrail/sorolens/internal/rpc"
 	"github.com/sorotrail/sorolens/internal/source"
 	"github.com/sorotrail/sorolens/internal/source/rpcsource"
@@ -59,7 +60,9 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	src, cleanup, startIngest, err := buildSource(ctx, cfg, log)
+	m := metrics.New()
+
+	src, cleanup, startIngest, err := buildSource(ctx, cfg, log, m)
 	if err != nil {
 		return err
 	}
@@ -82,7 +85,7 @@ func run() error {
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           router(src, log),
+		Handler:           router(src, log, m),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -126,7 +129,7 @@ func run() error {
 // contributors: adding a new SOURCE_MODE means adding a case here and an
 // implementation under internal/source. Nothing else in the program needs to
 // know which backend is in use.
-func buildSource(ctx context.Context, cfg config.Config, log *slog.Logger) (
+func buildSource(ctx context.Context, cfg config.Config, log *slog.Logger, m *metrics.Metrics) (
 	src source.EventSource,
 	cleanup func(),
 	startIngest func(context.Context) error,
@@ -173,6 +176,8 @@ func buildSource(ctx context.Context, cfg config.Config, log *slog.Logger) (
 			RetentionLedgers: cfg.RetentionLedgers,
 		}, log)
 
+		ingester.WithMetrics(m)
+
 		return rpcsource.New(pg, client), pg.Close, ingester.Run, nil
 
 	default:
@@ -181,7 +186,7 @@ func buildSource(ctx context.Context, cfg config.Config, log *slog.Logger) (
 }
 
 // router mounts the web UI at the root and the JSON API under /api.
-func router(src source.EventSource, log *slog.Logger) http.Handler {
+func router(src source.EventSource, log *slog.Logger, m *metrics.Metrics) http.Handler {
 	apiServer := api.New(src, log)
 
 	webServer, err := web.New(src, log)
@@ -194,7 +199,19 @@ func router(src source.EventSource, log *slog.Logger) http.Handler {
 	r := chi.NewRouter()
 	r.Use(requestLogger(log))
 	r.Use(middleware.Recoverer)
+	// RoutePattern returns the matched chi pattern (e.g. "/api/events/{id}"),
+	// not the raw path, keeping metric label cardinality bounded.
+	metrics.RoutePattern = func(req *http.Request) string {
+		if rc := chi.RouteContext(req.Context()); rc != nil {
+			return rc.RoutePattern()
+		}
+		return ""
+	}
+	r.Use(m.Middleware)
 
+	// /metrics is unauthenticated like the rest of SoroLens's read surface:
+	// it exposes route timings and ingest counters, no event data.
+	r.Handle("/metrics", m.Handler())
 	r.Get("/health", apiServer.HealthHandler())
 	r.Mount("/api", apiServer.Routes())
 	r.Mount("/", webServer.Routes())
