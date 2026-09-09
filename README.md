@@ -115,6 +115,7 @@ startup with a message naming both, rather than failing later on a request.
 | `SOURCE_MODE` | `rpc` | both | `rpc` (standalone) or `sorotrail` (upstream). |
 | `HTTP_ADDR` | `:8080` | both | Listen address for the UI and API. |
 | `LOG_LEVEL` | `info` | both | `debug` \| `info` \| `warn` \| `error`. |
+| `CORS_ALLOWED_ORIGINS` | empty | both | Browser Origins allowed to call the API cross-origin. Empty disables CORS. |
 | `NETWORK` | `testnet` | standalone | `testnet` \| `mainnet` \| `futurenet` \| `custom`. Selects the network preset (passphrase + public RPC). |
 | `RPC_URL` | per `NETWORK` | standalone | Stellar RPC endpoint; overrides the preset. |
 | `NETWORK_PASSPHRASE` | per `NETWORK` | standalone | Overrides the preset passphrase. Required with `NETWORK=custom`. |

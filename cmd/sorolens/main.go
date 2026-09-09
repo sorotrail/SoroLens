@@ -86,7 +86,7 @@ func run() error {
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           router(src, log, m),
+		Handler:           router(src, log, m, cfg.CORSAllowedOrigins),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -187,7 +187,7 @@ func buildSource(ctx context.Context, cfg config.Config, log *slog.Logger, m *me
 }
 
 // router mounts the web UI at the root and the JSON API under /api.
-func router(src source.EventSource, log *slog.Logger, m *metrics.Metrics) http.Handler {
+func router(src source.EventSource, log *slog.Logger, m *metrics.Metrics, corsOrigins []string) http.Handler {
 	apiServer := api.New(src, log)
 
 	webServer, err := web.New(src, log)
@@ -199,6 +199,7 @@ func router(src source.EventSource, log *slog.Logger, m *metrics.Metrics) http.H
 
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer, reqid.Middleware, requestLogger(log))
+	r.Use(api.CORSMiddleware(api.CORSConfig{Origins: corsOrigins}))
 	// RoutePattern returns the matched chi pattern (e.g. "/api/events/{id}"),
 	// not the raw path, keeping metric label cardinality bounded.
 	metrics.RoutePattern = func(req *http.Request) string {

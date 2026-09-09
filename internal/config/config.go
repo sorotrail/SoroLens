@@ -70,6 +70,11 @@ type Config struct {
 	// http://localhost:8080. Upstream mode only.
 	SoroTrailURL string
 
+	// CORSAllowedOrigins is the allow-list of browser Origins permitted to
+	// call the API cross-origin (CORS_ALLOWED_ORIGINS, comma-separated).
+	// Empty disables CORS: same-origin pages, including SoroLens's own UI,
+	// never need it.
+	CORSAllowedOrigins []string
 	// HTTPAddr is the listen address for the web UI and JSON API.
 	HTTPAddr string
 	// LogLevel is the minimum slog level (debug, info, warn, error).
@@ -149,6 +154,14 @@ func Load() (Config, error) {
 			return cfg, fmt.Errorf("invalid RETENTION_LEDGERS %q: want a positive integer", v)
 		}
 		cfg.RetentionLedgers = uint32(n)
+	}
+
+	if v := os.Getenv("CORS_ALLOWED_ORIGINS"); v != "" {
+		for _, o := range strings.Split(v, ",") {
+			if o = strings.TrimSpace(o); o != "" {
+				cfg.CORSAllowedOrigins = append(cfg.CORSAllowedOrigins, o)
+			}
+		}
 	}
 
 	if v := os.Getenv("LOG_LEVEL"); v != "" {
