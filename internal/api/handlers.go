@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/sorotrail/sorolens/internal/buildinfo"
 	"github.com/sorotrail/sorolens/internal/config"
 	"github.com/sorotrail/sorolens/internal/source"
 )
@@ -103,6 +104,16 @@ func (s *Server) handleGetEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, event)
+}
+
+// handleVersion serves the build information baked in via -ldflags, so a
+// running instance identifies the exact source it was built from.
+func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, buildinfo.Info{
+		Version: buildinfo.Version,
+		Commit:  buildinfo.Commit,
+		Date:    buildinfo.Date,
+	})
 }
 
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {

@@ -43,6 +43,7 @@ func (s *Server) Routes() chi.Router {
 	r.Get("/events", s.handleListEvents)
 	r.Get("/events/{id}", s.handleGetEvent)
 	r.Get("/stats", s.handleStats)
+	r.Get("/version", s.handleVersion)
 
 	return r
 }

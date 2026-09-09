@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -78,5 +79,30 @@ func TestReadyzReportsBackendFailure(t *testing.T) {
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("readyz with unhealthy source = %d, want 503", res.StatusCode)
+	}
+}
+
+func TestVersionEndpoint(t *testing.T) {
+	// Built through the api tree like the other endpoints; pins the real
+	// values, so a broken ldflags path shows up as "dev"/"none".
+	srv := httptest.NewServer(New(&fakeSource{}, discardLogger()).Routes())
+	defer srv.Close()
+
+	res, err := http.Get(srv.URL + "/version")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("version = %d, want 200", res.StatusCode)
+	}
+	var body map[string]string
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"version", "commit", "build_date"} {
+		if body[key] == "" {
+			t.Fatalf("version response missing %q: %+v", key, body)
+		}
 	}
 }
