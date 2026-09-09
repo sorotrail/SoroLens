@@ -5,7 +5,9 @@ All configuration is via environment variables. With Docker Compose, set them in
 | Variable | Default | Description |
 |---|---|---|
 | `SOURCE_MODE` | `rpc` | `rpc` for standalone mode, `sorotrail` for upstream mode. |
-| `RPC_URL` | `https://soroban-testnet.stellar.org` | Stellar RPC endpoint. Required and used only when `SOURCE_MODE=rpc`. |
+| `NETWORK` | `testnet` | Which Stellar network the RPC endpoint belongs to: `testnet` \| `mainnet` \| `futurenet` \| `custom`. Verified against the node at startup. Standalone mode only. |
+| `RPC_URL` | per `NETWORK` | Stellar RPC endpoint; overrides the network preset. Required and used only when `SOURCE_MODE=rpc`. |
+| `NETWORK_PASSPHRASE` | per `NETWORK` | Overrides the preset network passphrase. Required with `NETWORK=custom` (private standalone networks). |
 | `SOROTRAIL_URL` | — | Base URL of a SoroTrail instance's API. Required and used only when `SOURCE_MODE=sorotrail`. |
 | `DATABASE_URL` | — | Postgres connection string. Required only in standalone mode. |
 | `POLL_INTERVAL` | `5s` | How often standalone mode polls the RPC for new events. |

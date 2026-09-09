@@ -44,3 +44,19 @@ A contract explorer's whole value is what it can show you — and what it can sh
 ## Read-only by design
 
 SoroLens never writes to a contract, never holds keys, and (beyond its own optional Postgres cache in standalone mode) never mutates anything. Its entire job is reading and presenting — which keeps its security surface small and its hosting requirements light.
+
+## Observability (`internal/metrics`, `internal/reqid`, `internal/buildinfo`)
+
+- `/metrics` — Prometheus: HTTP request duration by route pattern; in
+  standalone mode also poll outcomes/duration, ingest lag behind the tip,
+  seconds since last poll, and events ingested.
+- `/livez`, `/readyz` — liveness checks nothing (restart loops otherwise);
+  readiness consults the event source's `Status`, so it means the same
+  thing regardless of backend.
+- `/api/version` — version, commit and build date via `-ldflags`.
+- Every request carries an `X-Request-ID`; error bodies and log lines echo
+  it, so a reported error maps to one request in the logs.
+
+Standalone mode verifies the RPC's network passphrase against the
+configured one at startup and refuses to start on mismatch — see
+[Configuration](../getting-started/configuration.md).

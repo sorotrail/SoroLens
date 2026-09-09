@@ -115,7 +115,9 @@ startup with a message naming both, rather than failing later on a request.
 | `SOURCE_MODE` | `rpc` | both | `rpc` (standalone) or `sorotrail` (upstream). |
 | `HTTP_ADDR` | `:8080` | both | Listen address for the UI and API. |
 | `LOG_LEVEL` | `info` | both | `debug` \| `info` \| `warn` \| `error`. |
-| `RPC_URL` | `https://soroban-testnet.stellar.org` | standalone | Stellar RPC endpoint. Point at a provider URL for mainnet. |
+| `NETWORK` | `testnet` | standalone | `testnet` \| `mainnet` \| `futurenet` \| `custom`. Selects the network preset (passphrase + public RPC). |
+| `RPC_URL` | per `NETWORK` | standalone | Stellar RPC endpoint; overrides the preset. |
+| `NETWORK_PASSPHRASE` | per `NETWORK` | standalone | Overrides the preset passphrase. Required with `NETWORK=custom`. |
 | `DATABASE_URL` | — (**required**) | standalone | Postgres connection string. |
 | `POLL_INTERVAL` | `5s` | standalone | Sleep between polls once caught up. Minimum 1s. |
 | `WATCHED_CONTRACTS` | empty | standalone | Comma-separated contract IDs. Empty ingests **all** contract events. |
@@ -126,6 +128,14 @@ startup with a message naming both, rather than failing later on a request.
 Watching more than 25 contracts is supported; SoroLens batches them across
 requests to respect the RPC's caps of 5 filters per request and 5 contract IDs
 per filter.
+
+## Observability
+
+`/metrics` serves Prometheus instrumentation: HTTP request duration by route pattern, and — in standalone mode — poll outcomes and duration, ingest lag behind the chain tip, seconds since the last poll, and the events-ingested counter. `/livez` and `/readyz` are orchestration probes: liveness checks nothing (a dead backend is a load-balancer concern, not a restart concern); readiness consults the event source's own health view — the database and RPC in standalone mode, the SoroTrail indexer in upstream mode. `/api/version` reports the version, commit and build date baked in at compile time. Every response carries an `X-Request-ID` correlation header, echoed in error bodies and log lines.
+
+## Networks
+
+A Stellar network's passphrase is its identity. `NETWORK` selects a preset — `testnet`, `mainnet` or `futurenet`, each carrying its public RPC endpoint and passphrase; `NETWORK=custom` takes `RPC_URL` + `NETWORK_PASSPHRASE` for private standalone networks. At startup SoroLens asks the RPC which network it belongs to and **refuses to start on a mismatch**, so a mainnet endpoint behind testnet configuration fails fast instead of quietly showing the wrong chain's activity as if the watched contracts simply had none.
 
 ## Web UI
 
