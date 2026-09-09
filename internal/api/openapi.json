@@ -460,6 +460,32 @@
           "created_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "token": {
+            "type": "object",
+            "description": "Present when the event matches the SEP-41 token interface layout: the event name and its semantic from/to/amount slots, so a client does not need the topic layout to read a token event.",
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": [
+                  "transfer",
+                  "mint",
+                  "burn",
+                  "clawback",
+                  "set_admin"
+                ]
+              },
+              "from": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              },
+              "amount": {
+                "type": "string",
+                "description": "i128 amount as a decimal string"
+              }
+            }
           }
         }
       },

@@ -58,7 +58,7 @@ func (s *Server) handleListEvents(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, "listing events", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, page)
+	writeJSON(w, http.StatusOK, annotatedPage{Events: annotateEvents(page.Events), NextCursor: page.NextCursor})
 }
 
 func (s *Server) handleContractEvents(w http.ResponseWriter, r *http.Request) {
@@ -80,7 +80,7 @@ func (s *Server) handleContractEvents(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, "listing contract events", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, page)
+	writeJSON(w, http.StatusOK, annotatedPage{Events: annotateEvents(page.Events), NextCursor: page.NextCursor})
 }
 
 // handleGetContract serves GET /api/contracts/{id}: one contract's summary —
@@ -127,7 +127,7 @@ func (s *Server) handleGetEvent(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, "loading event", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, event)
+	writeJSON(w, http.StatusOK, annotatedEvent{Event: event, Token: DetectTokenEvent(event)})
 }
 
 // handleVersion serves the build information baked in via -ldflags, so a
