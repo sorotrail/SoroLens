@@ -83,6 +83,23 @@ func (s *Server) handleContractEvents(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, page)
 }
 
+// handleGetContract serves GET /api/contracts/{id}: one contract's summary —
+// event count, ledger range and type breakdown — in the same shape the list
+// endpoint's rows carry, so a client parsing one parses the other.
+func (s *Server) handleGetContract(w http.ResponseWriter, r *http.Request) {
+	contractID := chi.URLParam(r, "id")
+	if !config.ValidContractID(contractID) {
+		writeError(w, r, http.StatusBadRequest, fmt.Errorf("invalid contract ID %q", contractID))
+		return
+	}
+	stats, err := s.src.ContractStats(r.Context(), contractID)
+	if err != nil {
+		s.fail(w, r, "loading contract", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
+}
+
 func (s *Server) handleContractStats(w http.ResponseWriter, r *http.Request) {
 	contractID := chi.URLParam(r, "id")
 	if !config.ValidContractID(contractID) {

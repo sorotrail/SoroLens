@@ -38,6 +38,7 @@ func (s *Server) Routes() chi.Router {
 	r.Use(middleware.Timeout(60 * time.Second))
 
 	r.Get("/contracts", s.handleListContracts)
+	r.Get("/contracts/{id}", s.handleGetContract)
 	r.Get("/contracts/{id}/events", s.handleContractEvents)
 	r.Get("/contracts/{id}/stats", s.handleContractStats)
 	r.Get("/events", s.handleListEvents)
