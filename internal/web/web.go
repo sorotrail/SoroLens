@@ -29,6 +29,9 @@ import (
 //go:embed templates/*.html
 var templatesFS embed.FS
 
+//go:embed favicon.svg
+var faviconSVG []byte
+
 // pageNames are the full pages; each is parsed together with the layout and
 // the shared partials.
 var pageNames = []string{"index", "contracts", "contract", "event", "notfound"}
@@ -72,6 +75,7 @@ func (s *Server) Routes() chi.Router {
 	r := chi.NewRouter()
 
 	r.Get("/", s.index)
+	r.Get("/favicon.ico", s.favicon)
 	r.Get("/contracts", s.contracts)
 	r.Get("/contracts/{id}", s.contract)
 	r.Get("/events/{id}", s.event)
@@ -112,6 +116,18 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, page, title stri
 		// The response is already partly written by this point, so all that is
 		// left is to record it.
 		s.log.Error("rendering page", "page", page, "error", err)
+	}
+}
+
+// favicon serves the embedded icon so browsers requesting /favicon.ico on
+// every page load stop logging 404s. Served with a long cache lifetime:
+// the icon is baked into the binary, so a new version always ships with a
+// new deploy anyway.
+func (s *Server) favicon(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "image/svg+xml")
+	w.Header().Set("Cache-Control", "public, max-age=604800")
+	if _, err := w.Write(faviconSVG); err != nil {
+		s.log.Warn("writing favicon response", "error", err)
 	}
 }
 
