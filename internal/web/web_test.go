@@ -342,3 +342,10 @@ func TestClassifySearch(t *testing.T) {
 		})
 	}
 }
+
+func TestFavicon(t *testing.T) {
+	rec := get(t, newTestServer(t, &fakeSource{}), "/favicon.ico")
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "image/svg+xml", rec.Header().Get("Content-Type"))
+	assert.NotEmpty(t, rec.Body.String())
+}
