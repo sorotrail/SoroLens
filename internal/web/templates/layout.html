@@ -15,6 +15,7 @@
     header .brand { font-weight: 700; font-size: 1.1rem; }
     header a { text-decoration: none; color: inherit; opacity: .8; }
     header a:hover, header a:focus { opacity: 1; text-decoration: underline; }
+    header a.active { opacity: 1; font-weight: 600; border-bottom: 2px solid currentColor; }
     header form { margin-left: auto; display: flex; gap: .4rem; }
     header input { min-width: 22rem; max-width: 100%; padding: .3rem .5rem; }
     main { padding: 1.5rem; max-width: 76rem; margin: 0 auto; }
@@ -61,8 +62,8 @@
 <body>
 <header>
   <span class="brand">🔭 SoroLens</span>
-  <a href="/">Overview</a>
-  <a href="/contracts">Contracts</a>
+  <a href="/" {{if eq .Active "overview"}}class="active"{{end}}>Overview</a>
+  <a href="/contracts" {{if eq .Active "contracts"}}class="active"{{end}}>Contracts</a>
   <form action="/search" method="get" role="search">
     <label for="q" class="visually-hidden" hidden>Search</label>
     <input id="q" type="text" name="q" placeholder="Contract ID (C…) or event ID (TOID)"
