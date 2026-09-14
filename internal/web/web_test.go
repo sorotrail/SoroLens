@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -348,4 +349,62 @@ func TestFavicon(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "image/svg+xml", rec.Header().Get("Content-Type"))
 	assert.NotEmpty(t, rec.Body.String())
+}
+
+func TestNavHighlightsActivePage(t *testing.T) {
+	src := &fakeSource{
+		contracts:     source.ContractPage{Contracts: []source.Contract{{ID: testContract}}},
+		contractStats: source.ContractStats{ContractID: testContract},
+		status:        source.Status{Healthy: true},
+	}
+
+	tests := []struct {
+		path   string
+		active string // link text expected to carry class="active"
+	}{
+		{"/", "Overview"},
+		{"/contracts", "Contracts"},
+		{"/contracts/" + testContract, "Contracts"},
+	}
+	linkNames := []string{"Overview", "Contracts"}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			rec := get(t, newTestServer(t, src), tt.path)
+			require.Equal(t, http.StatusOK, rec.Code)
+			html := rec.Body.String()
+
+			for _, name := range linkNames {
+				idx := strings.Index(html, ">"+name+"</a>")
+				require.GreaterOrEqual(t, idx, 0, "nav link %q not found", name)
+				tagStart := strings.LastIndex(html[:idx], "<a ")
+				tag := html[tagStart:idx]
+				hasActive := strings.Contains(tag, `class="active"`)
+				wantActive := name == tt.active
+				assert.Equal(t, wantActive, hasActive, "%s: nav link %q active=%v, want %v (tag: %s)", tt.path, name, hasActive, wantActive, tag)
+			}
+		})
+	}
+}
+
+func TestNavNotHighlightedOnEventOrErrorPages(t *testing.T) {
+	src := &fakeSource{
+		event:  sampleEvent(),
+		status: source.Status{Healthy: true},
+	}
+	linkNames := []string{"Overview", "Contracts"}
+
+	for _, path := range []string{"/events/" + sampleEvent().ID, "/no-such-page"} {
+		t.Run(path, func(t *testing.T) {
+			rec := get(t, newTestServer(t, src), path)
+			html := rec.Body.String()
+			for _, name := range linkNames {
+				idx := strings.Index(html, ">"+name+"</a>")
+				require.GreaterOrEqual(t, idx, 0, "nav link %q not found", name)
+				tagStart := strings.LastIndex(html[:idx], "<a ")
+				tag := html[tagStart:idx]
+				assert.NotContains(t, tag, `class="active"`, "%s: nav link %q must not be highlighted", path, name)
+			}
+		})
+	}
 }

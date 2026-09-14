@@ -93,8 +93,24 @@ func (s *Server) Routes() chi.Router {
 type pageData struct {
 	Title  string
 	Status source.Status
+	// Active is the header nav entry this page highlights, set from page
+	// via navSection. Empty means no entry is highlighted.
+	Active string
 	// Data carries the page-specific payload.
 	Data any
+}
+
+// navSection maps a page name to the header nav entry it highlights.
+// "contract" (a contract's detail page) highlights the same entry as
+// "contracts" — they're the same section as far as navigation is
+// concerned. "event" and "notfound" are deliberately absent (map lookup
+// zero-values to ""): neither is reached from a nav link, so nothing
+// should highlight for them, and "" must therefore not collide with
+// "index"'s own key below.
+var navSection = map[string]string{
+	"index":     "overview",
+	"contracts": "contracts",
+	"contract":  "contracts",
 }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, page, title string, data any) {
@@ -108,6 +124,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, page, title stri
 	payload := pageData{
 		Title:  title,
 		Status: s.src.Status(r.Context()),
+		Active: navSection[page],
 		Data:   data,
 	}
 
