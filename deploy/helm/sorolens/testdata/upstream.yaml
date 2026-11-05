@@ -1,0 +1,13 @@
+# Upstream mode (SOURCE_MODE=sorotrail): stateless deployment with multiple
+# replicas, no database Secret or DATABASE_URL env var, and no standalone
+# ingester settings in the ConfigMap.
+replicaCount: 2
+
+pdb:
+  enabled: true
+  minAvailable: 1
+
+config:
+  sourceMode: "sorotrail"
+  sorotrailUrl: "http://sorotrail.sorotrail.svc.cluster.local:8080"
+  corsAllowedOrigins: "https://explorer.example.com"

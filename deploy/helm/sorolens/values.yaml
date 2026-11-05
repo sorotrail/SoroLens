@@ -1,0 +1,145 @@
+# Number of pod replicas.
+#
+# In standalone mode (config.sourceMode: "rpc"), keep replicaCount at 1:
+# every replica runs its own in-process ingester polling Stellar RPC and
+# applying database migrations at startup. While UpsertEvents is idempotent
+# and migrations take an advisory lock, running multiple replicas in
+# standalone mode duplicates RPC polling traffic for no throughput gain.
+#
+# In upstream mode (config.sourceMode: "sorotrail"), SoroLens is completely
+# stateless and opens no database or ingester, so replicaCount can be scaled
+# freely behind the Service.
+replicaCount: 1
+
+image:
+  # Container image repository. Until the release pipeline (issue #63) publishes
+  # tagged images, override image.repository / image.tag with your built image.
+  repository: ghcr.io/sorotrail/sorolens
+  pullPolicy: IfNotPresent
+  # Overrides the image tag. Defaults to the chart's appVersion.
+  tag: ""
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Create a dedicated ServiceAccount for the pod.
+  create: true
+  annotations: {}
+  # Use an existing ServiceAccount instead of creating one.
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+# CPU/memory requests and limits.
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# ── Pod Disruption Budget ────────────────────────────────────────────────────
+#
+# Forbids voluntary disruptions (node drain, cluster upgrade) from taking
+# down every replica at once. Enable when running multiple replicas in
+# upstream mode (config.sourceMode: "sorotrail"). In standalone mode a
+# single replica is recommended, so pdb is disabled by default.
+pdb:
+  enabled: false
+  minAvailable: 1
+  # maxUnavailable: 1
+
+# ── SoroLens application configuration ───────────────────────────────────────
+#
+# Every environment variable read by internal/config is mapped here (except
+# DATABASE_URL, which holds credentials and lives under `database` below).
+# Mode-specific settings are omitted from the rendered ConfigMap and Pod spec
+# when the other mode is active.
+config:
+  # Operating mode:
+  #   "rpc"        standalone mode — poll Stellar RPC and store events in Postgres
+  #   "sorotrail"  upstream mode   — read from a SoroTrail indexer's HTTP API
+  sourceMode: "rpc"
+
+  # HTTP listen address for the web UI, JSON API, probes, and /metrics.
+  httpAddr: ":8080"
+
+  # Log verbosity: debug | info | warn | error
+  logLevel: "info"
+
+  # Optional: comma-separated browser origins allowed to call the API cross-origin.
+  # Empty disables CORS headers.
+  corsAllowedOrigins: ""
+
+  # ── Standalone mode only (config.sourceMode: "rpc") ────────────────────────
+  # Stellar network preset: testnet | mainnet | futurenet | custom
+  network: "testnet"
+
+  # Optional Stellar RPC endpoint override (defaults to the network preset).
+  rpcUrl: "https://soroban-testnet.stellar.org"
+
+  # Optional network passphrase override (required when network is "custom").
+  networkPassphrase: ""
+
+  # How often the standalone ingester polls Stellar RPC once caught up.
+  pollInterval: "5s"
+
+  # Optional comma-separated contract IDs (C...) to watch. Empty ingests all.
+  watchedContracts: ""
+
+  # Optional cold-start ledger sequence number. Empty reaches back retentionLedgers.
+  startLedger: ""
+
+  # Cold-start reach-back in ledgers (~24h at 5s/ledger).
+  retentionLedgers: "17280"
+
+  # ── Upstream mode only (config.sourceMode: "sorotrail") ────────────────────
+  # Base URL of the upstream SoroTrail indexer API (e.g. "http://sorotrail:8080").
+  sorotrailUrl: ""
+
+# ── Database (standalone mode only) ──────────────────────────────────────────
+#
+# Used only when config.sourceMode is "rpc". In upstream mode ("sorotrail"),
+# no Secret is created and DATABASE_URL is not injected into the pod.
+database:
+  # Name of an existing Secret containing the Postgres connection string.
+  existingSecret: ""
+  # Key within the existing Secret that holds DATABASE_URL.
+  existingSecretKey: "DATABASE_URL"
+  # Inline connection string stored in a chart-managed Secret when
+  # existingSecret is empty.
+  url: ""
+
+# ── Prometheus ServiceMonitor ─────────────────────────────────────────────────
+#
+# SoroLens exposes Prometheus metrics on the main HTTP port at /metrics.
+serviceMonitor:
+  enabled: false
+  namespace: ""
+  additionalLabels: {}
+  interval: "30s"
+  scrapeTimeout: "10s"
+  path: /metrics

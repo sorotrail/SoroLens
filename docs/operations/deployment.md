@@ -34,3 +34,40 @@ If you do run standalone mode, the same continuity consideration applies as any 
 1. (Standalone only) back up the database.
 2. Pull the new version, run migrations if standalone, restart.
 3. Verify `GET /health` reports the expected source mode and reachability.
+
+## Kubernetes (Helm chart)
+
+A Helm chart is included under `deploy/helm/sorolens` and supports both operating modes.
+
+### Standalone mode (`SOURCE_MODE=rpc`)
+
+Provide a Postgres connection string either through an existing Kubernetes `Secret` (recommended) or `database.url`:
+
+```bash
+helm install sorolens ./deploy/helm/sorolens \
+  --namespace sorolens --create-namespace \
+  --set database.existingSecret=sorolens-db \
+  --set config.network=testnet
+```
+
+> **Replica count in standalone mode:** Keep `replicaCount: 1` when `config.sourceMode` is `"rpc"`. Each standalone pod runs its own in-process RPC ingester and applies database migrations on startup; running multiple replicas would duplicate Stellar RPC polling without increasing throughput.
+
+### Upstream mode (`SOURCE_MODE=sorotrail`)
+
+In upstream mode SoroLens is stateless and uses no database or ingester. Standalone-only settings and `DATABASE_URL` are omitted from the rendered manifests, and `replicaCount` can be scaled freely:
+
+```bash
+helm install sorolens ./deploy/helm/sorolens \
+  --namespace sorolens --create-namespace \
+  --set config.sourceMode=sorotrail \
+  --set config.sorotrailUrl=http://sorotrail.sorotrail.svc.cluster.local:8080 \
+  --set replicaCount=2 \
+  --set pdb.enabled=true
+```
+
+### Probes and Prometheus metrics
+
+- `livenessProbe` targets `GET /livez` (process liveness only, never fails on downstream outages).
+- `readinessProbe` targets `GET /readyz` (verifies Postgres + Stellar RPC in standalone mode, or the SoroTrail indexer in upstream mode).
+- Prometheus metrics are served on the main HTTP port at `/metrics`; set `serviceMonitor.enabled=true` to create a `ServiceMonitor`.
+
