@@ -12,6 +12,7 @@ All configuration is via environment variables. With Docker Compose, set them in
 | `DATABASE_URL` | — | Postgres connection string. Required only in standalone mode. |
 | `POLL_INTERVAL` | `5s` | How often standalone mode polls the RPC for new events. |
 | `WATCHED_CONTRACTS` | (empty) | Comma-separated `C...` addresses to restrict standalone ingestion to. Empty = index everything. |
+| `NEW_CONTRACT_START` | `retention` | Where a contract added to `WATCHED_CONTRACTS` starts ingesting from: `retention` (backfill `RETENTION_LEDGERS` or `START_LEDGER`), `tip` (current chain tip), or an explicit ledger number. |
 | `HTTP_ADDR` | `:8080` | Listen address for the UI and API. |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, or `error`. |
 
@@ -25,3 +26,11 @@ See [Operating modes](../concepts/operating-modes.md) for the full comparison. S
 
 - **Testnet**: the public endpoint works out of the box, rate-limited to roughly 10 requests/second — fine for exploration.
 - **Mainnet**: use a dedicated RPC provider URL for reliability.
+
+## Per-contract ingestion cursors (standalone mode)
+
+SoroLens tracks ingestion progress differently depending on whether `WATCHED_CONTRACTS` is set:
+
+- **Ingest-everything mode (`WATCHED_CONTRACTS` empty):** SoroLens reads all contract events on the network and maintains a single global resume position in `ingest_state` (`id = 1`).
+- **Watched-contracts mode (`WATCHED_CONTRACTS` non-empty):** Each watched contract maintains its own cursor in `contract_ingest_state`. Contracts at the same ledger are read together in a single windowed RPC request, while a newly added contract starts from `NEW_CONTRACT_START` (`retention` by default, `tip`, or a specific ledger number) and catches up to the rest without rewinding existing contracts. Existing deployments upgrading from a global cursor automatically seed their watched contracts from `ingest_state` so they do not re-ingest their retention window.
+

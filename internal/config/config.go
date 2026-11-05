@@ -34,6 +34,10 @@ const (
 	// retains events for about 24h to 7d, so reaching further back than the
 	// node's own window simply yields nothing.
 	DefaultRetentionLedgers = 17280
+	// DefaultNewContractStart controls where a newly added watched contract
+	// starts ingesting from: "retention" (backfill the retention window),
+	// "tip" (start from the current chain tip), or an explicit ledger number.
+	DefaultNewContractStart = "retention"
 )
 
 // Config holds all runtime configuration. Every field maps to one environment
@@ -65,6 +69,9 @@ type Config struct {
 	StartLedger uint32
 	// RetentionLedgers is the cold-start reach-back when StartLedger is unset.
 	RetentionLedgers uint32
+	// NewContractStart selects where a newly added watched contract starts
+	// ingesting from ("retention", "tip", or a positive ledger number).
+	NewContractStart string
 
 	// SoroTrailURL is the base URL of a SoroTrail indexer's HTTP API, e.g.
 	// http://localhost:8080. Upstream mode only.
@@ -101,6 +108,7 @@ func Load() (Config, error) {
 		PollInterval:     DefaultPollInterval,
 		SoroTrailURL:     strings.TrimRight(os.Getenv("SOROTRAIL_URL"), "/"),
 		RetentionLedgers: DefaultRetentionLedgers,
+		NewContractStart: DefaultNewContractStart,
 		HTTPAddr:         getenv("HTTP_ADDR", DefaultHTTPAddr),
 		LogLevel:         slog.LevelInfo,
 	}
@@ -154,6 +162,20 @@ func Load() (Config, error) {
 			return cfg, fmt.Errorf("invalid RETENTION_LEDGERS %q: want a positive integer", v)
 		}
 		cfg.RetentionLedgers = uint32(n)
+	}
+
+	if v := strings.TrimSpace(os.Getenv("NEW_CONTRACT_START")); v != "" {
+		lower := strings.ToLower(v)
+		switch lower {
+		case "retention", "tip":
+			cfg.NewContractStart = lower
+		default:
+			n, err := strconv.ParseUint(v, 10, 32)
+			if err != nil || n == 0 {
+				return cfg, fmt.Errorf("invalid NEW_CONTRACT_START %q (want \"retention\", \"tip\" or a positive ledger number)", v)
+			}
+			cfg.NewContractStart = strconv.FormatUint(n, 10)
+		}
 	}
 
 	if v := os.Getenv("CORS_ALLOWED_ORIGINS"); v != "" {

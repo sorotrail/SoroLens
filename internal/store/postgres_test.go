@@ -34,7 +34,7 @@ func newTestStore(t *testing.T) *Postgres {
 	require.NoError(t, err)
 	t.Cleanup(pg.Close)
 
-	_, err = pg.pool.Exec(ctx, `TRUNCATE events`)
+	_, err = pg.pool.Exec(ctx, `TRUNCATE events, contract_ingest_state`)
 	require.NoError(t, err)
 	_, err = pg.pool.Exec(ctx, `UPDATE ingest_state SET last_ledger = 0, last_cursor = '' WHERE id = 1`)
 	require.NoError(t, err)
@@ -455,6 +455,29 @@ func TestIngestState(t *testing.T) {
 		var rows int
 		require.NoError(t, pg.pool.QueryRow(ctx, `SELECT count(*) FROM ingest_state`).Scan(&rows))
 		assert.Equal(t, 1, rows, "ingest_state must stay a single row")
+	})
+
+	t.Run("per-contract ingest state round-trips independently", func(t *testing.T) {
+		states, err := pg.GetContractIngestStates(ctx)
+		require.NoError(t, err)
+		assert.Empty(t, states)
+
+		require.NoError(t, pg.SaveContractIngestState(ctx, ContractIngestState{
+			ContractID: "CAAA",
+			LastLedger: 350,
+			LastCursor: "cur-a",
+		}))
+		require.NoError(t, pg.SaveContractIngestState(ctx, ContractIngestState{
+			ContractID: "CBBB",
+			LastLedger: 410,
+		}))
+
+		states, err = pg.GetContractIngestStates(ctx)
+		require.NoError(t, err)
+		require.Len(t, states, 2)
+		assert.Equal(t, int64(350), states["CAAA"].LastLedger)
+		assert.Equal(t, "cur-a", states["CAAA"].LastCursor)
+		assert.Equal(t, int64(410), states["CBBB"].LastLedger)
 	})
 }
 

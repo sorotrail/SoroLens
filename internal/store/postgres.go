@@ -349,6 +349,46 @@ func (p *Postgres) SaveIngestState(ctx context.Context, s IngestState) error {
 	return nil
 }
 
+// GetContractIngestStates returns every stored per-contract ingestion cursor,
+// keyed by contract ID.
+func (p *Postgres) GetContractIngestStates(ctx context.Context) (map[string]ContractIngestState, error) {
+	rows, err := p.pool.Query(ctx,
+		`SELECT contract_id, last_ledger, last_cursor, updated_at FROM contract_ingest_state`)
+	if err != nil {
+		return nil, fmt.Errorf("loading contract ingest states: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[string]ContractIngestState)
+	for rows.Next() {
+		var s ContractIngestState
+		if err := rows.Scan(&s.ContractID, &s.LastLedger, &s.LastCursor, &s.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scanning contract ingest state: %w", err)
+		}
+		out[s.ContractID] = s
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("reading contract ingest states: %w", err)
+	}
+	return out, nil
+}
+
+// SaveContractIngestState upserts the ingestion progress for one contract.
+func (p *Postgres) SaveContractIngestState(ctx context.Context, s ContractIngestState) error {
+	_, err := p.pool.Exec(ctx, `
+		INSERT INTO contract_ingest_state (contract_id, last_ledger, last_cursor, updated_at)
+		VALUES ($1, $2, $3, now())
+		ON CONFLICT (contract_id) DO UPDATE
+		SET last_ledger = EXCLUDED.last_ledger,
+		    last_cursor = EXCLUDED.last_cursor,
+		    updated_at  = EXCLUDED.updated_at`,
+		s.ContractID, s.LastLedger, s.LastCursor)
+	if err != nil {
+		return fmt.Errorf("saving contract ingest state for %s: %w", s.ContractID, err)
+	}
+	return nil
+}
+
 // rowScanner covers both pgx.Row and pgx.Rows, so scanEvent serves the
 // single-row and multi-row paths alike.
 type rowScanner interface {
