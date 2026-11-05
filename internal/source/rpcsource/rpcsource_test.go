@@ -56,8 +56,14 @@ func (s *stubStore) GetIngestState(context.Context) (store.IngestState, error) {
 	return store.IngestState{}, nil
 }
 func (s *stubStore) SaveIngestState(context.Context, store.IngestState) error { return nil }
-func (s *stubStore) Ping(context.Context) error                               { return s.pingErr }
-func (s *stubStore) Close()                                                   {}
+func (s *stubStore) GetContractIngestStates(context.Context) (map[string]store.ContractIngestState, error) {
+	return nil, nil
+}
+func (s *stubStore) SaveContractIngestState(context.Context, store.ContractIngestState) error {
+	return nil
+}
+func (s *stubStore) Ping(context.Context) error { return s.pingErr }
+func (s *stubStore) Close()                     {}
 
 // stubRPC is a canned rpc.Client used only for status reporting here.
 type stubRPC struct {

@@ -68,15 +68,20 @@ func (m *mockRPC) capturedRequests() []rpc.GetEventsRequest {
 type mockStore struct {
 	mu sync.Mutex
 
-	events map[string]source.Event
-	state  store.IngestState
+	events         map[string]source.Event
+	state          store.IngestState
+	contractStates map[string]store.ContractIngestState
 
-	upsertErr error
-	stateErr  error
+	upsertErr        error
+	stateErr         error
+	contractStateErr map[string]error
 }
 
 func newMockStore() *mockStore {
-	return &mockStore{events: make(map[string]source.Event)}
+	return &mockStore{
+		events:         make(map[string]source.Event),
+		contractStates: make(map[string]store.ContractIngestState),
+	}
 }
 
 func (m *mockStore) UpsertEvents(_ context.Context, events []source.Event) (int64, error) {
@@ -116,6 +121,44 @@ func (m *mockStore) SaveIngestState(_ context.Context, s store.IngestState) erro
 	}
 	m.state = s
 	return nil
+}
+
+func (m *mockStore) GetContractIngestStates(context.Context) (map[string]store.ContractIngestState, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.stateErr != nil {
+		return nil, m.stateErr
+	}
+	out := make(map[string]store.ContractIngestState, len(m.contractStates))
+	for k, v := range m.contractStates {
+		out[k] = v
+	}
+	return out, nil
+}
+
+func (m *mockStore) SaveContractIngestState(_ context.Context, s store.ContractIngestState) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.stateErr != nil {
+		return m.stateErr
+	}
+	if m.contractStateErr != nil {
+		if err, bad := m.contractStateErr[s.ContractID]; bad && err != nil {
+			return err
+		}
+	}
+	if m.contractStates == nil {
+		m.contractStates = make(map[string]store.ContractIngestState)
+	}
+	m.contractStates[s.ContractID] = s
+	return nil
+}
+
+func (m *mockStore) savedContractState(contractID string) (store.ContractIngestState, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s, ok := m.contractStates[contractID]
+	return s, ok
 }
 
 func (m *mockStore) storedCount() int {

@@ -175,6 +175,7 @@ func buildSource(ctx context.Context, cfg config.Config, log *slog.Logger, m *me
 			PollInterval:     cfg.PollInterval,
 			StartLedger:      cfg.StartLedger,
 			RetentionLedgers: cfg.RetentionLedgers,
+			NewContractStart: cfg.NewContractStart,
 		}, log)
 
 		ingester.WithMetrics(m)

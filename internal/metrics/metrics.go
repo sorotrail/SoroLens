@@ -22,6 +22,7 @@ type Metrics struct {
 	pollsTotal   *prometheus.CounterVec
 	pollDuration prometheus.Histogram
 	pollLag      prometheus.Gauge
+	contractLag  *prometheus.GaugeVec
 
 	eventsIngested prometheus.Counter
 	sincePollSec   prometheus.Gauge
@@ -50,6 +51,11 @@ func New() *Metrics {
 			Help: "How far the stored resume point trails the chain tip, in ledgers.",
 		}),
 
+		contractLag: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "sorolens_contract_ingest_lag_ledgers",
+			Help: "How far each watched contract's stored resume point trails the chain tip, in ledgers.",
+		}, []string{"contract_id"}),
+
 		eventsIngested: prometheus.NewCounter(prometheus.CounterOpts{
 			Name: "sorolens_events_ingested_total",
 			Help: "Contract events ingested from the RPC and stored. Standalone mode only.",
@@ -67,7 +73,7 @@ func New() *Metrics {
 		}, []string{"route", "method", "status"}),
 	}
 	m.registry.MustRegister(m.pollsTotal, m.pollDuration, m.pollLag,
-		m.eventsIngested, m.sincePollSec, m.httpDuration)
+		m.contractLag, m.eventsIngested, m.sincePollSec, m.httpDuration)
 	return m
 }
 
@@ -96,6 +102,15 @@ func (m *Metrics) SetLag(ledgersBehind int64) {
 		return
 	}
 	m.pollLag.Set(float64(ledgersBehind))
+}
+
+// SetContractLag records how far one watched contract's cursor trails the
+// chain tip.
+func (m *Metrics) SetContractLag(contractID string, ledgersBehind int64) {
+	if m == nil {
+		return
+	}
+	m.contractLag.WithLabelValues(contractID).Set(float64(ledgersBehind))
 }
 
 // TickPollAge advances the seconds-since-last-poll gauge; called on a timer

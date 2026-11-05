@@ -25,6 +25,14 @@ type IngestState struct {
 	UpdatedAt  time.Time
 }
 
+// ContractIngestState records ingestion progress for a single watched contract.
+type ContractIngestState struct {
+	ContractID string
+	LastLedger int64
+	LastCursor string
+	UpdatedAt  time.Time
+}
+
 // Store is the persistence boundary. The ingester and the standalone
 // EventSource depend on this interface, never on Postgres directly.
 //
@@ -50,6 +58,8 @@ type Store interface {
 
 	GetIngestState(ctx context.Context) (IngestState, error)
 	SaveIngestState(ctx context.Context, s IngestState) error
+	GetContractIngestStates(ctx context.Context) (map[string]ContractIngestState, error)
+	SaveContractIngestState(ctx context.Context, s ContractIngestState) error
 
 	Ping(ctx context.Context) error
 	Close()
