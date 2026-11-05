@@ -1,6 +1,7 @@
 package web
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -47,44 +48,102 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "index", "Overview", indexData{Stats: stats, RecentFragment: fragment})
 }
 
-// contractsData backs the contracts list page.
+// contractsData backs the contracts list page and the /partials/contracts
+// fragment.
 type contractsData struct {
 	Contracts  []source.Contract
 	Search     string
+	Cursor     string
 	NextCursor string
 	// NextURL is the ready-made link to the following page, so the template
 	// does not have to rebuild the query string.
 	NextURL string
+	// FirstURL links back to the first page when viewing a continuation page,
+	// preserving any active search filter.
+	FirstURL string
+	// MoreURL is the htmx fragment URL for the next page.
+	MoreURL string
 }
 
 func (s *Server) contracts(w http.ResponseWriter, r *http.Request) {
-	params := r.URL.Query()
-	q := source.ContractQuery{
-		Search: strings.TrimSpace(params.Get("search")),
-		Cursor: params.Get("cursor"),
-	}
-
-	page, err := s.src.ListContracts(r.Context(), q)
+	data, err := s.contractsFragmentFor(r)
 	if err != nil {
+		if errors.Is(err, source.ErrInvalidCursor) || isBadQuery(err) {
+			s.badRequest(w, r, "The pagination cursor or query parameter is invalid or came from a different deployment.")
+			return
+		}
 		s.fail(w, r, "listing contracts", err)
 		return
 	}
 
+	s.render(w, r, "contracts", "Contracts", data)
+}
+
+// partialContracts serves the contracts table fragment on its own.
+func (s *Server) partialContracts(w http.ResponseWriter, r *http.Request) {
+	data, err := s.contractsFragmentFor(r)
+	if err != nil {
+		if errors.Is(err, source.ErrInvalidCursor) || isBadQuery(err) {
+			s.badRequest(w, r, err.Error())
+			return
+		}
+		s.fail(w, r, "listing contracts", err)
+		return
+	}
+	s.renderPartial(w, "contracts-table", data)
+}
+
+func (s *Server) contractsFragmentFor(r *http.Request) (contractsData, error) {
+	q, err := contractQueryFromRequest(r)
+	if err != nil {
+		return contractsData{}, err
+	}
+
+	page, err := s.src.ListContracts(r.Context(), q)
+	if err != nil {
+		return contractsData{}, err
+	}
+
+	params := r.URL.Query()
+	rawLimit := params.Get("limit")
+
 	data := contractsData{
 		Contracts:  page.Contracts,
 		Search:     q.Search,
+		Cursor:     q.Cursor,
 		NextCursor: page.NextCursor,
+	}
+	if q.Cursor != "" {
+		first := url.Values{}
+		if q.Search != "" {
+			first.Set("search", q.Search)
+		}
+		if rawLimit != "" {
+			first.Set("limit", rawLimit)
+		}
+		if encoded := first.Encode(); encoded != "" {
+			data.FirstURL = "/contracts?" + encoded
+		} else {
+			data.FirstURL = "/contracts"
+		}
 	}
 	if page.NextCursor != "" {
 		next := url.Values{}
 		if q.Search != "" {
 			next.Set("search", q.Search)
 		}
+		if rawLimit != "" {
+			next.Set("limit", rawLimit)
+		}
 		next.Set("cursor", page.NextCursor)
 		data.NextURL = "/contracts?" + next.Encode()
+		data.MoreURL = "/partials/contracts?" + next.Encode()
 	}
+	return data, nil
+}
 
-	s.render(w, r, "contracts", "Contracts", data)
+func isBadQuery(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "limit must be")
 }
 
 // contractData backs the contract detail page.

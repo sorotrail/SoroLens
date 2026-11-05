@@ -107,3 +107,54 @@
 </div>
 {{end}}
 {{end}}
+
+
+{{/* contracts-table renders one page of contracts and its pagination controls. */}}
+{{define "contracts-table"}}
+{{if .Contracts}}
+{{if .NextURL}}
+<p class="muted">Showing {{len .Contracts}} contracts on this page; more contracts are available.</p>
+{{end}}
+<div class="scroll">
+  <table>
+    <thead>
+      <tr>
+        <th>Contract</th>
+        <th>Events</th>
+        <th>First ledger</th>
+        <th>Last ledger</th>
+        <th>Last activity</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Contracts}}
+      <tr>
+        <td><a class="mono" href="/contracts/{{.ID}}" title="{{.ID}}">{{shorten .ID 10}}</a></td>
+        <td class="num">{{.EventCount}}</td>
+        <td class="num">{{.FirstLedger}}</td>
+        <td class="num">{{.LastLedger}}</td>
+        <td>{{if .LastActivity.IsZero}}<span class="muted">unknown</span>{{else}}{{.LastActivity.UTC.Format "2006-01-02 15:04:05Z"}}{{end}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</div>
+
+{{if or .FirstURL .NextURL}}
+<nav class="pagination" aria-label="Contracts pagination">
+  {{if .FirstURL}}<a href="{{.FirstURL}}" aria-label="First page of contracts">← First page</a>{{end}}
+  {{if .NextURL}}<a href="{{.NextURL}}" rel="next" aria-label="Next page of contracts">Next page →</a>{{end}}
+</nav>
+{{end}}
+
+{{else}}
+<div class="empty">
+  <p>No contracts to show{{if .Search}} for “{{.Search}}”{{end}}.</p>
+  {{if .FirstURL}}
+  <p><a href="{{.FirstURL}}" aria-label="First page of contracts">← Return to the first page</a></p>
+  {{else}}
+  <p class="muted">Standalone mode only sees contracts that emitted events while SoroLens was running.</p>
+  {{end}}
+</div>
+{{end}}
+{{end}}

@@ -141,23 +141,30 @@ func (s *Source) ListContracts(ctx context.Context, q source.ContractQuery) (sou
 
 	start := 0
 	if q.Cursor != "" {
-		// Upstream contract cursors are a plain offset into the derived list.
-		_, offset, err := decodeCursor(q.Cursor)
-		if err != nil {
-			return source.ContractPage{}, err
+		// Upstream contract cursors encode the last contract's (ID, LastLedger)
+		// sort key so that if the cached contract list refreshes between pages,
+		// paging resumes from the same position in the (LastLedger DESC, ID ASC)
+		// ordering rather than shifting by offset.
+		afterID, lastLedger, err := decodeCursor(q.Cursor)
+		if err != nil || afterID == "" || lastLedger <= 0 {
+			return source.ContractPage{}, source.ErrInvalidCursor
 		}
-		start = int(offset)
-		if start > len(filtered) {
-			start = len(filtered)
-		}
+		start = sort.Search(len(filtered), func(i int) bool {
+			c := filtered[i]
+			if c.LastLedger != lastLedger {
+				return c.LastLedger < lastLedger
+			}
+			return c.ID > afterID
+		})
 	}
 
 	end := min(start+limit, len(filtered))
 	page := filtered[start:end]
 
 	var next string
-	if end < len(filtered) {
-		next = encodeCursor("", int64(end))
+	if end < len(filtered) && len(page) > 0 {
+		last := page[len(page)-1]
+		next = encodeCursor(last.ID, last.LastLedger)
 	}
 
 	if page == nil {
