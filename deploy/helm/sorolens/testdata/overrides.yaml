@@ -1,0 +1,48 @@
+# Representative override set for standalone mode golden render tests:
+# exercises an existing database Secret (suppressing the chart-managed Secret),
+# ServiceMonitor, PodDisruptionBudget, custom ServiceAccount name, and optional
+# standalone config fields.
+replicaCount: 1
+
+serviceAccount:
+  create: true
+  name: sorolens-runner
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 512Mi
+
+pdb:
+  enabled: true
+  minAvailable: 1
+
+database:
+  existingSecret: existing-db-secret
+  existingSecretKey: DATABASE_URL
+
+serviceMonitor:
+  enabled: true
+  interval: 15s
+  scrapeTimeout: 10s
+  path: /metrics
+  additionalLabels:
+    release: prometheus
+
+config:
+  sourceMode: "rpc"
+  network: "custom"
+  rpcUrl: "https://rpc-custom.example.com"
+  networkPassphrase: "Custom Network ; 2026"
+  pollInterval: "10s"
+  watchedContracts: "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
+  startLedger: "500"
+  retentionLedgers: "8640"
+  corsAllowedOrigins: "https://explorer.example.com"
+  logLevel: "debug"

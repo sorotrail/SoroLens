@@ -1,0 +1,15 @@
+apiVersion: v2
+name: sorolens
+description: Helm chart for SoroLens — a Soroban contract event explorer
+type: application
+version: 0.1.0
+# SoroLens does not yet have a container release pipeline (see issue #63);
+# 0.1.0 is the default tag until tagged releases are published to GHCR.
+appVersion: "0.1.0"
+keywords:
+  - stellar
+  - soroban
+  - blockchain
+  - explorer
+sources:
+  - https://github.com/sorotrail/SoroLens

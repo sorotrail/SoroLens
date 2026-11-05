@@ -69,3 +69,21 @@ jobs:
       - uses: golangci/golangci-lint-action@v9.3.0
         with:
           version: v2.12.2
+
+  helm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - uses: azure/setup-helm@v4
+      - name: Lint chart (standalone and upstream modes)
+        run: |
+          helm lint deploy/helm/sorolens --set database.url=postgres://sorolens:sorolens@localhost:5432/sorolens
+          helm lint deploy/helm/sorolens --set config.sourceMode=sorotrail --set config.sorotrailUrl=http://sorotrail:8080
+      - name: Run Helm render and config-coverage tests
+        run: go test -v ./deploy/helm/sorolens
+

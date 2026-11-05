@@ -12,11 +12,11 @@ import (
 type Network struct {
 	// Name is the short label used in config and logs (testnet, mainnet,
 	// futurenet, custom).
-	Name string
+	Name string `env:"NETWORK"`
 	// Passphrase is the network passphrase — a Stellar network's identity.
-	Passphrase string
+	Passphrase string `env:"NETWORK_PASSPHRASE"`
 	// RPCURL is the public RPC endpoint for this network.
-	RPCURL string
+	RPCURL string `env:"RPC_URL"`
 }
 
 // KnownNetworks are the SDF-maintained networks with public RPC endpoints.

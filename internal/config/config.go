@@ -40,7 +40,7 @@ const (
 // variable; see .env.example for the full list.
 type Config struct {
 	// SourceMode selects the EventSource implementation (rpc or sorotrail).
-	SourceMode SourceMode
+	SourceMode SourceMode `env:"SOURCE_MODE"`
 	// Network is the Stellar network in standalone mode — its name,
 	// passphrase and RPC endpoint, resolved from NETWORK / RPC_URL /
 	// NETWORK_PASSPHRASE by ParseNetwork. Verified against the node at
@@ -50,35 +50,35 @@ type Config struct {
 
 	// RPCURL is the Stellar RPC endpoint (JSON-RPC 2.0 over HTTP). Standalone
 	// mode only.
-	RPCURL string
+	RPCURL string `env:"RPC_URL"`
 	// DatabaseURL is a Postgres connection string in pgx format. Standalone
 	// mode only; upstream mode uses no database.
-	DatabaseURL string
+	DatabaseURL string `env:"DATABASE_URL"`
 	// PollInterval is how long the ingester sleeps between polls once it has
 	// caught up to the latest ledger. Standalone mode only.
-	PollInterval time.Duration
+	PollInterval time.Duration `env:"POLL_INTERVAL"`
 	// WatchedContracts limits ingestion to these contract IDs. Empty means
 	// ingest events from every contract. Standalone mode only.
-	WatchedContracts []string
+	WatchedContracts []string `env:"WATCHED_CONTRACTS"`
 	// StartLedger forces a cold start from this ledger instead of reaching
 	// back RetentionLedgers from the chain tip. Standalone mode only.
-	StartLedger uint32
+	StartLedger uint32 `env:"START_LEDGER"`
 	// RetentionLedgers is the cold-start reach-back when StartLedger is unset.
-	RetentionLedgers uint32
+	RetentionLedgers uint32 `env:"RETENTION_LEDGERS"`
 
 	// SoroTrailURL is the base URL of a SoroTrail indexer's HTTP API, e.g.
 	// http://localhost:8080. Upstream mode only.
-	SoroTrailURL string
+	SoroTrailURL string `env:"SOROTRAIL_URL"`
 
 	// CORSAllowedOrigins is the allow-list of browser Origins permitted to
 	// call the API cross-origin (CORS_ALLOWED_ORIGINS, comma-separated).
 	// Empty disables CORS: same-origin pages, including SoroLens's own UI,
 	// never need it.
-	CORSAllowedOrigins []string
+	CORSAllowedOrigins []string `env:"CORS_ALLOWED_ORIGINS"`
 	// HTTPAddr is the listen address for the web UI and JSON API.
-	HTTPAddr string
+	HTTPAddr string `env:"HTTP_ADDR"`
 	// LogLevel is the minimum slog level (debug, info, warn, error).
-	LogLevel slog.Level
+	LogLevel slog.Level `env:"LOG_LEVEL"`
 }
 
 // UsesDatabase reports whether the selected mode needs Postgres. Upstream mode
