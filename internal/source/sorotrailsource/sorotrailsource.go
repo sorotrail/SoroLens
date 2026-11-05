@@ -296,32 +296,61 @@ func (s *Source) Stats(ctx context.Context) (source.Stats, error) {
 	return out, nil
 }
 
-// Status reports the upstream indexer's health.
+// Status reports the upstream indexer's health under a bounded timeout.
 func (s *Source) Status(ctx context.Context) source.Status {
+	probeCtx, cancel := context.WithTimeout(ctx, source.ProbeTimeout)
+	defer cancel()
+
 	st := source.Status{
 		Mode:          "sorotrail",
 		Healthy:       true,
+		State:         source.StateOK,
 		RetentionNote: RetentionNote,
+		Dependencies:  make(map[string]source.DependencyStatus, 1),
 	}
 
-	health, err := s.api.Health(ctx)
+	health, err := s.api.Health(probeCtx)
 	if err != nil {
+		clean := source.SanitizeDetail(err.Error())
 		st.Healthy = false
-		st.Detail = "sorotrail unreachable: " + err.Error()
+		st.State = source.StateDown
+		st.Detail = "sorotrail unreachable: " + clean
+		st.Dependencies["sorotrail"] = source.DependencyStatus{
+			Healthy: false,
+			Status:  source.StateDown,
+			Detail:  clean,
+		}
 		return st
 	}
 	if health.Status != "ok" {
-		st.Healthy = false
-		st.Detail = "sorotrail reports " + health.Status
-		for name, detail := range health.Checks {
-			if detail != "ok" {
-				st.Detail += "; " + name + ": " + detail
+		detail := "sorotrail reports " + source.SanitizeDetail(health.Status)
+		names := make([]string, 0, len(health.Checks))
+		for name := range health.Checks {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			checkDetail := health.Checks[name]
+			if checkDetail != "ok" {
+				detail += "; " + name + ": " + source.SanitizeDetail(checkDetail)
 			}
+		}
+		st.Healthy = false
+		st.State = source.StateDegraded
+		st.Detail = detail
+		st.Dependencies["sorotrail"] = source.DependencyStatus{
+			Healthy: false,
+			Status:  source.StateDegraded,
+			Detail:  detail,
 		}
 		return st
 	}
 
-	if stats, err := s.api.Stats(ctx); err == nil {
+	st.Dependencies["sorotrail"] = source.DependencyStatus{
+		Healthy: true,
+		Status:  source.StateOK,
+	}
+	if stats, err := s.api.Stats(probeCtx); err == nil {
 		st.LatestLedger = stats.LastIngestedLedger
 	}
 	return st

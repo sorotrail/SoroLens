@@ -20,6 +20,7 @@ func discardLogger() *slog.Logger {
 func probeServer(status source.Status) http.Handler {
 	s := New(&fakeSource{status: status}, discardLogger())
 	mux := http.NewServeMux()
+	mux.Handle("/health", s.HealthHandler())
 	mux.Handle("/livez", s.LivezHandler())
 	mux.Handle("/readyz", s.ReadyzHandler())
 	return mux
@@ -68,7 +69,11 @@ func TestReadyzReportsBackendFailure(t *testing.T) {
 	srv := httptest.NewServer(probeServer(source.Status{
 		Mode:    "sorotrail",
 		Healthy: false,
+		State:   source.StateDown,
 		Detail:  "indexer unreachable",
+		Dependencies: map[string]source.DependencyStatus{
+			"sorotrail": {Healthy: false, Status: source.StateDown, Detail: "indexer unreachable"},
+		},
 	}))
 	defer srv.Close()
 
@@ -79,6 +84,53 @@ func TestReadyzReportsBackendFailure(t *testing.T) {
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("readyz with unhealthy source = %d, want 503", res.StatusCode)
+	}
+	var body map[string]any
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body["status"] != "not ready" {
+		t.Fatalf("readyz status = %v, want not ready", body["status"])
+	}
+	if body["state"] != "down" {
+		t.Fatalf("readyz state = %v, want down", body["state"])
+	}
+	deps, ok := body["dependencies"].(map[string]any)
+	if !ok || deps["sorotrail"] == nil {
+		t.Fatalf("readyz dependencies missing sorotrail: %+v", body)
+	}
+}
+
+func TestHealthReportsPerDependencyDetail(t *testing.T) {
+	srv := httptest.NewServer(probeServer(source.Status{
+		Mode:    "rpc",
+		Healthy: false,
+		State:   source.StateDegraded,
+		Detail:  "stellar rpc unreachable: timeout",
+		Dependencies: map[string]source.DependencyStatus{
+			"database": {Healthy: true, Status: source.StateOK},
+			"rpc":      {Healthy: false, Status: source.StateDown, Detail: "timeout"},
+		},
+	}))
+	defer srv.Close()
+
+	res, err := http.Get(srv.URL + "/health")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("health with degraded source = %d, want 503", res.StatusCode)
+	}
+	var got source.Status
+	if err := json.NewDecoder(res.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got.State != source.StateDegraded {
+		t.Fatalf("state = %q, want %q", got.State, source.StateDegraded)
+	}
+	if !got.Dependencies["database"].Healthy || got.Dependencies["rpc"].Healthy {
+		t.Fatalf("unexpected dependencies: %+v", got.Dependencies)
 	}
 }
 

@@ -439,18 +439,28 @@ func TestStatusReportsHealth(t *testing.T) {
 
 		assert.Equal(t, "sorotrail", st.Mode)
 		assert.True(t, st.Healthy)
+		assert.Equal(t, source.StateOK, st.State)
 		assert.Equal(t, int64(1004), st.LatestLedger)
 		assert.NotEmpty(t, st.RetentionNote)
+		assert.Equal(t, map[string]source.DependencyStatus{
+			"sorotrail": {Healthy: true, Status: source.StateOK},
+		}, st.Dependencies)
+		assert.NotContains(t, st.Dependencies, "database",
+			"upstream mode has no database and must not report one")
 	})
 
 	t.Run("unreachable indexer is unhealthy, not an error", func(t *testing.T) {
 		f := newFakeIndexer(nil)
-		f.failWith = fmt.Errorf("connection refused")
+		f.failWith = fmt.Errorf("Get https://user:secretpass@indexer.internal/health: connection refused")
 		src := newTestSource(f)
 
 		st := src.Status(context.Background())
 		assert.False(t, st.Healthy)
+		assert.Equal(t, source.StateDown, st.State)
 		assert.Contains(t, st.Detail, "connection refused")
+		assert.NotContains(t, st.Detail, "secretpass")
+		assert.NotContains(t, st.Dependencies["sorotrail"].Detail, "secretpass")
+		assert.Equal(t, source.StateDown, st.Dependencies["sorotrail"].Status)
 	})
 }
 
