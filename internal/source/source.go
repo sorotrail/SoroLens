@@ -23,8 +23,43 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"regexp"
 	"time"
 )
+
+// ProbeTimeout bounds health and readiness checks so a hung dependency cannot
+// stall a probe caller.
+const ProbeTimeout = 5 * time.Second
+
+// DependencyState is the machine-readable verdict for an individual dependency
+// or the overall source ("ok", "degraded", or "down").
+type DependencyState string
+
+const (
+	StateOK       DependencyState = "ok"
+	StateDegraded DependencyState = "degraded"
+	StateDown     DependencyState = "down"
+)
+
+// DependencyStatus describes the health of a single backend dependency.
+type DependencyStatus struct {
+	Healthy bool            `json:"healthy"`
+	Status  DependencyState `json:"status"`
+	Detail  string          `json:"detail,omitempty"`
+}
+
+var (
+	urlCredentialsPattern = regexp.MustCompile(`([a-zA-Z][a-zA-Z0-9+.-]*://)([^/\s@]+)@`)
+	kvPasswordPattern     = regexp.MustCompile(`(?i)(password|passwd|pwd|secret|token|api_key)\s*=\s*('[^']*'|"[^"]*"|\S+)`)
+)
+
+// SanitizeDetail scrubs credentials from a dependency error message before it
+// is exposed on unauthenticated health endpoints.
+func SanitizeDetail(detail string) string {
+	sanitized := urlCredentialsPattern.ReplaceAllString(detail, "${1}REDACTED@")
+	sanitized = kvPasswordPattern.ReplaceAllString(sanitized, "${1}=REDACTED")
+	return sanitized
+}
 
 // ErrNotFound is returned by GetEvent when no event has the requested ID.
 // Implementations must wrap or return this exact error so handlers can map it
@@ -153,6 +188,9 @@ type Status struct {
 	Mode string `json:"mode"`
 	// Healthy is false when the backend is unreachable or degraded.
 	Healthy bool `json:"healthy"`
+	// State distinguishes normal operation ("ok"), partial degradation where
+	// stored data remains queryable ("degraded"), and a fatal outage ("down").
+	State DependencyState `json:"state,omitempty"`
 	// Detail explains an unhealthy status, or adds context to a healthy one.
 	Detail string `json:"detail,omitempty"`
 	// LatestLedger is the newest ledger the backend knows about, if known.
@@ -160,6 +198,9 @@ type Status struct {
 	// RetentionNote is a human-readable caveat about history coverage, shown
 	// in the UI banner.
 	RetentionNote string `json:"retention_note,omitempty"`
+	// Dependencies reports each backend dependency separately: "database" and
+	// "rpc" in standalone mode, "sorotrail" in upstream mode.
+	Dependencies map[string]DependencyStatus `json:"dependencies,omitempty"`
 }
 
 // EventSource is the read-only interface every backend implements. All methods

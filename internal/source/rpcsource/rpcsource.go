@@ -10,6 +10,7 @@ package rpcsource
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/sorotrail/sorolens/internal/rpc"
 	"github.com/sorotrail/sorolens/internal/source"
@@ -70,32 +71,91 @@ func (s *Source) Stats(ctx context.Context) (source.Stats, error) {
 	return s.store.Stats(ctx)
 }
 
-// Status reports database and RPC health. It never returns an error: an
-// unreachable dependency becomes an unhealthy Status so the UI can always
-// render its banner.
+// Status reports database and RPC health concurrently under a shared deadline.
+// It never returns an error: an unreachable dependency becomes an unhealthy
+// Status so the UI can always render its banner, while Dependencies lets
+// monitoring distinguish a fatal database outage ("down") from a stalled RPC
+// where stored events are still queryable ("degraded").
 func (s *Source) Status(ctx context.Context) source.Status {
+	probeCtx, cancel := context.WithTimeout(ctx, source.ProbeTimeout)
+	defer cancel()
+
+	var (
+		wg     sync.WaitGroup
+		dbErr  error
+		health rpc.Health
+		rpcErr error
+	)
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		dbErr = s.store.Ping(probeCtx)
+	}()
+	go func() {
+		defer wg.Done()
+		health, rpcErr = s.rpc.GetHealth(probeCtx)
+	}()
+	wg.Wait()
+
+	dbDep := source.DependencyStatus{Healthy: true, Status: source.StateOK}
+	if dbErr != nil {
+		dbDep = source.DependencyStatus{
+			Healthy: false,
+			Status:  source.StateDown,
+			Detail:  source.SanitizeDetail(dbErr.Error()),
+		}
+	}
+
+	rpcDep := source.DependencyStatus{Healthy: true, Status: source.StateOK}
+	switch {
+	case rpcErr != nil:
+		rpcDep = source.DependencyStatus{
+			Healthy: false,
+			Status:  source.StateDown,
+			Detail:  source.SanitizeDetail(rpcErr.Error()),
+		}
+	case health.Status != "healthy":
+		rpcDep = source.DependencyStatus{
+			Healthy: false,
+			Status:  source.StateDegraded,
+			Detail:  fmt.Sprintf("stellar rpc reports %q", source.SanitizeDetail(health.Status)),
+		}
+	}
+
 	st := source.Status{
 		Mode:          string(sourceModeRPC),
-		Healthy:       true,
+		Healthy:       dbDep.Healthy && rpcDep.Healthy,
+		State:         source.StateOK,
 		RetentionNote: RetentionNote,
+		Dependencies: map[string]source.DependencyStatus{
+			"database": dbDep,
+			"rpc":      rpcDep,
+		},
 	}
-
-	if err := s.store.Ping(ctx); err != nil {
-		st.Healthy = false
-		st.Detail = fmt.Sprintf("database unreachable: %v", err)
-		return st
-	}
-
-	health, err := s.rpc.GetHealth(ctx)
-	switch {
-	case err != nil:
-		st.Healthy = false
-		st.Detail = fmt.Sprintf("stellar rpc unreachable: %v", err)
-	case health.Status != "healthy":
-		st.Healthy = false
-		st.Detail = fmt.Sprintf("stellar rpc reports %q", health.Status)
-	default:
+	if rpcDep.Healthy {
 		st.LatestLedger = int64(health.LatestLedger)
+	}
+
+	switch {
+	case !dbDep.Healthy && !rpcDep.Healthy:
+		st.State = source.StateDown
+		if rpcErr != nil {
+			st.Detail = fmt.Sprintf("database unreachable: %s; stellar rpc unreachable: %s", dbDep.Detail, rpcDep.Detail)
+		} else {
+			st.Detail = fmt.Sprintf("database unreachable: %s; %s", dbDep.Detail, rpcDep.Detail)
+		}
+	case !dbDep.Healthy:
+		st.State = source.StateDown
+		st.Detail = fmt.Sprintf("database unreachable: %s", dbDep.Detail)
+	case !rpcDep.Healthy:
+		// Stored events remain queryable while Postgres is up, so an RPC
+		// failure degrades ingestion rather than taking the explorer down.
+		st.State = source.StateDegraded
+		if rpcErr != nil {
+			st.Detail = fmt.Sprintf("stellar rpc unreachable: %s", rpcDep.Detail)
+		} else {
+			st.Detail = rpcDep.Detail
+		}
 	}
 	return st
 }

@@ -34,3 +34,33 @@ If you do run standalone mode, the same continuity consideration applies as any 
 1. (Standalone only) back up the database.
 2. Pull the new version, run migrations if standalone, restart.
 3. Verify `GET /health` reports the expected source mode and reachability.
+
+## Health & Readiness Probes
+
+SoroLens exposes three probe endpoints at the root:
+
+- `GET /livez` — **Liveness probe.** Always returns `200 OK` (`{"status":"alive"}`) without touching any dependency, so a database or RPC outage never causes an orchestrator restart loop.
+- `GET /readyz` — **Readiness probe.** Returns `200 OK` when every dependency for the active `SOURCE_MODE` is healthy and `503 Service Unavailable` otherwise, alongside `state` (`"ok"`, `"degraded"`, or `"down"`) and a `dependencies` map.
+- `GET /health` — **Combined health view.** Returns the full `Status` object (`200 OK` or `503 Service Unavailable`), including `mode`, `healthy`, `state`, `detail`, `latest_ledger`, `retention_note`, and per-dependency status under `dependencies`.
+
+Example standalone response (`SOURCE_MODE=rpc`) when the Stellar RPC is unreachable while Postgres remains up (`state: "degraded"`):
+
+```json
+{
+  "mode": "rpc",
+  "healthy": false,
+  "state": "degraded",
+  "detail": "stellar rpc unreachable: connection timeout",
+  "retention_note": "Standalone mode captures events only while SoroLens is running...",
+  "dependencies": {
+    "database": { "healthy": true, "status": "ok" },
+    "rpc": { "healthy": false, "status": "down", "detail": "connection timeout" }
+  }
+}
+```
+
+### Alerting Guidance
+
+- **`state == "down"` (Critical / Page):** In standalone mode, `dependencies.database.healthy == false` means Postgres is unreachable and the explorer cannot serve any queries. In upstream mode, `dependencies.sorotrail.healthy == false` with `status == "down"` means the SoroTrail indexer is unreachable.
+- **`state == "degraded"` (Warning / Ticket):** In standalone mode, `dependencies.database.healthy == true` while `dependencies.rpc.healthy == false` means stored history is still served normally, but ingestion of new ledgers has stalled and should be investigated before the RPC retention window expires.
+
