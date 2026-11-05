@@ -29,10 +29,16 @@ type fakeSource struct {
 	status        source.Status
 	err           error
 
-	lastEventQuery source.EventQuery
+	lastEventQuery    source.EventQuery
+	lastContractQuery source.ContractQuery
+	listContractsFn   func(context.Context, source.ContractQuery) (source.ContractPage, error)
 }
 
-func (f *fakeSource) ListContracts(context.Context, source.ContractQuery) (source.ContractPage, error) {
+func (f *fakeSource) ListContracts(ctx context.Context, q source.ContractQuery) (source.ContractPage, error) {
+	f.lastContractQuery = q
+	if f.listContractsFn != nil {
+		return f.listContractsFn(ctx, q)
+	}
 	return f.contracts, f.err
 }
 
@@ -150,6 +156,64 @@ func TestContractsPageRenders(t *testing.T) {
 	assert.Contains(t, body, "42")
 	assert.Contains(t, body, "/contracts/"+testContract, "each row should link to the contract")
 	assert.Contains(t, body, "Next page", "a next cursor should produce a paging link")
+	assert.Contains(t, body, "more contracts are available", "the page should state when the list is incomplete")
+	assert.Contains(t, body, `aria-label="Next page of contracts"`)
+	assert.Equal(t, source.DefaultLimit, src.lastContractQuery.Limit, "page size should come from source.NormalizeLimit")
+}
+
+func TestContractsPaginationPreservesFilterAndHandlesInvalidCursor(t *testing.T) {
+	contractA := "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
+	contractB := "CDZZXVGUCLBUTE3WDD6TF2NXPTBPOYTVPPBBIZMSPVIQLUG226XJ4PAN"
+
+	src := &fakeSource{
+		status: source.Status{Healthy: true},
+		listContractsFn: func(_ context.Context, q source.ContractQuery) (source.ContractPage, error) {
+			switch q.Cursor {
+			case "":
+				return source.ContractPage{
+					Contracts:  []source.Contract{{ID: contractA, EventCount: 10, FirstLedger: 1, LastLedger: 20}},
+					NextCursor: "opaque-cursor-page-2",
+				}, nil
+			case "opaque-cursor-page-2":
+				return source.ContractPage{
+					Contracts: []source.Contract{{ID: contractB, EventCount: 5, FirstLedger: 1, LastLedger: 10}},
+				}, nil
+			default:
+				return source.ContractPage{}, source.ErrInvalidCursor
+			}
+		},
+	}
+	h := newTestServer(t, src)
+
+	// Page 1 with a search filter.
+	rec1 := get(t, h, "/contracts?search=CD")
+	require.Equal(t, http.StatusOK, rec1.Code)
+	body1 := rec1.Body.String()
+	assert.Contains(t, body1, "/contracts/"+contractA)
+	assert.NotContains(t, body1, "/contracts/"+contractB)
+	assert.Contains(t, body1, "/contracts?cursor=opaque-cursor-page-2&amp;search=CD",
+		"the search filter must survive in the next-page link")
+
+	// Page 2 via the opaque cursor.
+	rec2 := get(t, h, "/contracts?cursor=opaque-cursor-page-2&search=CD")
+	require.Equal(t, http.StatusOK, rec2.Code)
+	assert.Equal(t, "CD", src.lastContractQuery.Search)
+	assert.Equal(t, "opaque-cursor-page-2", src.lastContractQuery.Cursor)
+	body2 := rec2.Body.String()
+	assert.Contains(t, body2, "/contracts/"+contractB)
+	assert.NotContains(t, body2, "/contracts/"+contractA)
+	assert.Contains(t, body2, `href="/contracts?search=CD"`, "continuation pages link back to the first page with the filter intact")
+
+	// Invalid or stale cursor renders a 400 page rather than a 500.
+	recBad := get(t, h, "/contracts?cursor=stale-cursor")
+	require.Equal(t, http.StatusBadRequest, recBad.Code)
+	assert.Contains(t, recBad.Body.String(), "Bad request")
+
+	// Partial endpoint also renders just the table fragment.
+	recPartial := get(t, h, "/partials/contracts?search=CD")
+	require.Equal(t, http.StatusOK, recPartial.Code)
+	assert.NotContains(t, recPartial.Body.String(), "<html")
+	assert.Contains(t, recPartial.Body.String(), "/contracts/"+contractA)
 }
 
 func TestContractsPageEmptyState(t *testing.T) {

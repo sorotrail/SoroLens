@@ -81,9 +81,10 @@ func (s *Server) Routes() chi.Router {
 	r.Get("/events/{id}", s.event)
 	r.Get("/search", s.search)
 
-	// htmx fragment endpoints: these return just an events table, so filtering
-	// and paging swap in place instead of reloading the page.
+	// htmx fragment endpoints: these return just an events or contracts table,
+	// so filtering and paging swap in place instead of reloading the page.
 	r.Get("/partials/events", s.partialEvents)
+	r.Get("/partials/contracts", s.partialContracts)
 
 	r.NotFound(s.notFound)
 	return r
@@ -265,4 +266,10 @@ func isNotFound(err error) bool { return errors.Is(err, errNotFound) }
 // exactly the same filters.
 func eventQueryFromRequest(r *http.Request) (source.EventQuery, error) {
 	return api.EventQueryFromRequest(r)
+}
+
+// contractQueryFromRequest reuses the API's parser so the UI and the API share
+// the same search, cursor and limit normalization.
+func contractQueryFromRequest(r *http.Request) (source.ContractQuery, error) {
+	return api.ContractQueryFromRequest(r)
 }

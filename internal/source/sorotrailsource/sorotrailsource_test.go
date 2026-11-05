@@ -381,6 +381,29 @@ func TestListContractsSearchAndPaging(t *testing.T) {
 		}
 		assert.Len(t, seen, 5)
 	})
+
+	t.Run("keyset cursor stays stable if cache refreshes with a newer contract", func(t *testing.T) {
+		page1, err := src.ListContracts(context.Background(), source.ContractQuery{Limit: 2})
+		require.NoError(t, err)
+		require.Len(t, page1.Contracts, 2)
+		require.NotEmpty(t, page1.NextCursor)
+
+		// Simulate a cache refresh adding a newer contract at the front of the list.
+		newer := makeEvents(1, 2000, "CONTRACT_NEW")
+		f2 := newFakeIndexer(append(events, newer...))
+		src2 := newTestSource(f2)
+
+		page2, err := src2.ListContracts(context.Background(), source.ContractQuery{Limit: 2, Cursor: page1.NextCursor})
+		require.NoError(t, err)
+		require.Len(t, page2.Contracts, 2)
+		assert.NotEqual(t, page1.Contracts[1].ID, page2.Contracts[0].ID,
+			"keyset cursor must not repeat the last contract of page 1 when the cache shifts")
+	})
+
+	t.Run("invalid cursor returns ErrInvalidCursor", func(t *testing.T) {
+		_, err := src.ListContracts(context.Background(), source.ContractQuery{Cursor: "not-a-valid-cursor"})
+		require.ErrorIs(t, err, source.ErrInvalidCursor)
+	})
 }
 
 func TestContractListIsCached(t *testing.T) {

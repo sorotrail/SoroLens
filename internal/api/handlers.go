@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -26,19 +27,17 @@ type errorResponse struct {
 }
 
 func (s *Server) handleListContracts(w http.ResponseWriter, r *http.Request) {
-	q := source.ContractQuery{
-		Search: r.URL.Query().Get("search"),
-		Cursor: r.URL.Query().Get("cursor"),
-	}
-
-	limit, err := parseLimit(r.URL.Query().Get("limit"))
+	q, err := ContractQueryFromRequest(r)
 	if err != nil {
 		writeError(w, r, http.StatusBadRequest, err)
 		return
 	}
-	q.Limit = limit
 
 	page, err := s.src.ListContracts(r.Context(), q)
+	if errors.Is(err, source.ErrInvalidCursor) {
+		writeError(w, r, http.StatusBadRequest, err)
+		return
+	}
 	if err != nil {
 		s.fail(w, r, "listing contracts", err)
 		return
@@ -54,6 +53,10 @@ func (s *Server) handleListEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	page, err := s.src.ListEvents(r.Context(), q)
+	if errors.Is(err, source.ErrInvalidCursor) {
+		writeError(w, r, http.StatusBadRequest, err)
+		return
+	}
 	if err != nil {
 		s.fail(w, r, "listing events", err)
 		return
@@ -76,6 +79,10 @@ func (s *Server) handleContractEvents(w http.ResponseWriter, r *http.Request) {
 	q.ContractID = contractID
 
 	page, err := s.src.ListEvents(r.Context(), q)
+	if errors.Is(err, source.ErrInvalidCursor) {
+		writeError(w, r, http.StatusBadRequest, err)
+		return
+	}
 	if err != nil {
 		s.fail(w, r, "listing contract events", err)
 		return
@@ -147,6 +154,22 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, stats)
+}
+
+// ContractQueryFromRequest parses the contract list query parameters shared by
+// the JSON API and the web UI: search, cursor and limit, clamping the page size
+// through source.NormalizeLimit.
+func ContractQueryFromRequest(r *http.Request) (source.ContractQuery, error) {
+	params := r.URL.Query()
+	limit, err := parseLimit(params.Get("limit"))
+	if err != nil {
+		return source.ContractQuery{}, err
+	}
+	return source.ContractQuery{
+		Search: strings.TrimSpace(params.Get("search")),
+		Cursor: params.Get("cursor"),
+		Limit:  source.NormalizeLimit(limit),
+	}, nil
 }
 
 // EventQueryFromRequest parses the event filter query parameters shared by the
